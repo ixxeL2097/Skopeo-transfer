@@ -1,0 +1,4 @@
+.pytest_cache
+resources/__pycache__
+resources/tests/__pycache__
+credentials.json
