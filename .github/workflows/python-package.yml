@@ -47,18 +47,19 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Pytest version.${BLANK}"
         pytest --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing testing.${BLANK}"
-        coverage run -m --source=. pytest ${WORKING_DIR}/tests
-    - name: Code coverage with coverage
-      id: code-coverage
-      run: |
-        echo -e "${BLUE}[ STEP - COVERAGE ] > Code coverage report with coverage.${BLANK}"
-        echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
-        coverage --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
-        coverage report -m --omit="${WORKING_DIR}/tests/*"
-        COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
-        echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
-        #echo ::set-output name=COV_RATE::${COV_RATE}
+        pytest ${WORKING_DIR}/tests/ --cov-report=xml --cov-report=term-missing --cov=./ --cov-config=.coveragerc
+        # coverage run -m --source=. pytest ${WORKING_DIR}/tests
+    # - name: Code coverage with coverage
+    #   id: code-coverage
+    #   run: |
+    #     echo -e "${BLUE}[ STEP - COVERAGE ] > Code coverage report with coverage.${BLANK}"
+    #     echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
+    #     coverage --version
+    #     echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
+    #     coverage report -m --omit="${WORKING_DIR}/tests/*"
+    #     COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
+    #     echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
+    #     #echo ::set-output name=COV_RATE::${COV_RATE}
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
@@ -67,6 +68,10 @@ jobs:
         hadolint --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing linting.${BLANK}"
         hadolint ${WORKING_DIR}/Dockerfile --ignore DL3007 --ignore DL3017 --ignore DL3018
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        fail_ci_if_error: false
 
   build:
     needs: test
