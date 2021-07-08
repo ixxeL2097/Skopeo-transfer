@@ -47,7 +47,15 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Pytest version.${BLANK}"
         pytest --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing testing.${BLANK}"
-        pytest ${WORKING_DIR}/tests
+        coverage run -m --source=. pytest ${WORKING_DIR}/tests
+    - name: Code coverage with coverage
+      id: code-coverage
+      run: |
+        echo -e "${BLUE}[ STEP - COVERAGE ] > Code coverage report with coverage.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
+        coverage --version
+        echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
+        coverage report -m
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
