@@ -55,7 +55,10 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
         coverage --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
-        coverage report -m --omit=${WORKING_DIR}/tests/test_core.py
+        coverage report -m --omit="${WORKING_DIR}/tests/*"
+        COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
+        echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
+        #echo ::set-output name=COV_RATE::${COV_RATE}
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
