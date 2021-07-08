@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/ixxeL2097/Skopeo-transfer/actions/workflows/python-package.yml/badge.svg)](https://github.com/ixxeL2097/Skopeo-transfer/actions/workflows/python-package.yml)
 
-This project is dedicated to python skopeo script. This python script is intended to automatically transfer images between registries (pull, tag and push), more specifically between OpenShift registries.
+This project is dedicated to Skopeo-transfer Python script.
+This script is intended to facilitate skopeo transfer usage between registries.
 
-## Objectives
-Transfer images between clusters without manual intervention
+## Documentation
 
 ## 01 - [Script Usage](documentation/01-Script-usage.md)
 

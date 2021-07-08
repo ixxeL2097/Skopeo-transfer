@@ -1,10 +1,9 @@
 FROM alpine:latest
-LABEL maintainer="IBM Frederic Spiers <frederic.spiers-isc.france@ibm.com>" \
+
+LABEL maintainer="IBM Frederic Spiers <fredspiers@gmail.com>" \
       component="deployment-tool"
 
-ARG TZ="Europe/Paris"
-
-ENV TZ=$TZ
+ENV TZ="Europe/Paris"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
     && echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
