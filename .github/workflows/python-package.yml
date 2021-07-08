@@ -55,7 +55,7 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
         coverage --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
-        coverage report -m
+        coverage report -m --omit=${WORKING_DIR}/tests/test_core.py
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
