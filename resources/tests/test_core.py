@@ -28,6 +28,14 @@ class MyTest(unittest.TestCase):
             "token": "d452509d-acee-4d3a-8fc2-a15735fb43a1",
             "ns": "ixxel"
         },
+        "fail1" : {
+            "name": "ixxel-repo",
+            "api": "",
+            "registry": "docker.io",
+            "sa": "fail",
+            "token": "d452509d-acee-4d3a-8fc2-a15735fb43a1",
+            "ns": "ixxel"
+        },
         "public" : {
             "name": "docker-hub",
             "registry": "",
@@ -46,6 +54,12 @@ class MyTest(unittest.TestCase):
         parser.add_argument('--daemon', default=False, action='store_true', help='use local docker daemon registry')
         parser.add_argument('--creds', type=str, help='Path of the json file for registries credentials')
         return parser
+
+    def test_parser(self):
+        skopeoTransfer.sys.argv[1:] = ['--image','test','--public']
+        args = skopeoTransfer.parse()
+        self.assertEqual(getattr(args, 'image'),'test')
+        self.assertTrue(getattr(args, 'public'))
 
     def test_full_single_public_transfer(self):
         # Context
@@ -112,11 +126,11 @@ class MyTest(unittest.TestCase):
         except Exception as exc:
             assert False, f"Skopeo test_full_single_get_latest_specific failed : {exc}"
 
-    def test_full_multiple_private_transfer(self):
+    def test_full_multiple_public_transfer(self):
         # Context
         f = open("test.txt", "a")
         f.write("alpine:latest"+"\n")
-        f.write("alpine:3.12")
+        f.write("alpine:3.12"+"\n")
         f.close()
         parser = self.create_parser()
         args = parser.parse_args(['--file', 'test.txt', '--public'])
@@ -130,8 +144,59 @@ class MyTest(unittest.TestCase):
             source, target = skopeoTransfer.prepare_execution(MANDATORY_ENV_VARS, credentials)
             skopeoTransfer.process_options(source, target, args)
         except Exception as exc:
+            assert False, f"Skopeo test_full_multiple_public_transfer failed : {exc}"
+        os.remove("test.txt")
+
+    def test_full_multiple_private_transfer(self):
+        # Context
+        f = open("test.txt", "a")
+        f.write("alpine:latest"+"\n")
+        f.write("alpine:3.12"+"\n")
+        f.close()
+        parser = self.create_parser()
+        args = parser.parse_args(['--file', 'test.txt'])
+        credentials = self.credentials
+        os.environ['SOURCE'] = 'creds1'
+        os.environ['SRC_NAMESPACE'] = 'ixxel'
+        os.environ['TARGET'] = 'creds2'
+        os.environ['DST_NAMESPACE'] = 'ixxel'
+        # Test
+        try:
+            MANDATORY_ENV_VARS = skopeoTransfer.define_mandatory_vars(args)
+            source, target = skopeoTransfer.prepare_execution(MANDATORY_ENV_VARS, credentials)
+            skopeoTransfer.process_options(source, target, args)
+        except Exception as exc:
             assert False, f"Skopeo test_full_multiple_private_transfer failed : {exc}"
         os.remove("test.txt")
+
+    def test_full_fail_single_public_transfer(self):
+        # Context
+        parser = self.create_parser()
+        args = parser.parse_args(['--image', 'alpine:latest'])
+        credentials = self.credentials
+        os.environ['SOURCE'] = 'fail1'
+        os.environ['SRC_NAMESPACE'] = 'ixxel'
+        os.environ['TARGET'] = 'creds2'
+        os.environ['DST_NAMESPACE'] = 'ixxel'
+        # Test
+        with self.assertRaises(SystemExit):
+            MANDATORY_ENV_VARS = skopeoTransfer.define_mandatory_vars(args)
+            source, target = skopeoTransfer.prepare_execution(MANDATORY_ENV_VARS, credentials)
+            skopeoTransfer.process_options(source, target, args)
+
+    def test_full_fail_single_get_latest(self):
+        # Context
+        parser = self.create_parser()
+        args = parser.parse_args(['--update', 'failxyz', '--public'])
+        credentials = self.credentials
+        os.environ['SOURCE'] = 'public'
+        os.environ['TARGET'] = 'creds2'
+        os.environ['DST_NAMESPACE'] = 'ixxel'
+        # Test
+        with self.assertRaises(SystemExit):
+            MANDATORY_ENV_VARS = skopeoTransfer.define_mandatory_vars(args)
+            source, target = skopeoTransfer.prepare_execution(MANDATORY_ENV_VARS, credentials)
+            skopeoTransfer.process_options(source, target, args)
 
     # def test_get_latest_release(self):
         # source = {
