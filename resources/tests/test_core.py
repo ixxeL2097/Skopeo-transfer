@@ -112,6 +112,27 @@ class MyTest(unittest.TestCase):
         except Exception as exc:
             assert False, f"Skopeo test_full_single_get_latest_specific failed : {exc}"
 
+    def test_full_multiple_private_transfer(self):
+        # Context
+        f = open("test.txt", "a")
+        f.write("alpine:latest"+"\n")
+        f.write("alpine:3.12")
+        f.close()
+        parser = self.create_parser()
+        args = parser.parse_args(['--file', 'test.txt', '--public'])
+        credentials = self.credentials
+        os.environ['SOURCE'] = 'public'
+        os.environ['TARGET'] = 'creds2'
+        os.environ['DST_NAMESPACE'] = 'ixxel'
+        # Test
+        try:
+            MANDATORY_ENV_VARS = skopeoTransfer.define_mandatory_vars(args)
+            source, target = skopeoTransfer.prepare_execution(MANDATORY_ENV_VARS, credentials)
+            skopeoTransfer.process_options(source, target, args)
+        except Exception as exc:
+            assert False, f"Skopeo test_full_multiple_private_transfer failed : {exc}"
+        os.remove("test.txt")
+
     # def test_get_latest_release(self):
         # source = {
         # "name": "docker-hub",
