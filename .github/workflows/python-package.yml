@@ -15,14 +15,19 @@ env:
   PURPLE: \033[1;35m
   CYAN: \033[1;36m
   BLANK: \033[0m
+  TEST_IMAGE: ixxel/multi-tools-alpine:v1.0
+  BUILD_IMAGE: ixxel/multi-tools-alpine:v1.0
   WORKING_DIR: resources
   COVERAGE_THRESHOLD: 70
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/multi-tools-alpine:v1.0
+      image: ${TEST_IMAGE}
     defaults:
       run:
         shell: bash
@@ -36,15 +41,15 @@ jobs:
         echo -e "${BLUE}[ STEP - LINTING CODE ] > Linting Python code with Flake8.${BLANK}"
         echo -e "${CYAN}[ INFO ] > Flake8 version.${BLANK}"
         flake8 --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing linting.${BLANK}"
+        echo -e "${YELLOW}[ EXECUTING ] > Executing code linting.${BLANK}"
         flake8 ${WORKING_DIR}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
         flake8 ${WORKING_DIR}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
         # flake8 ${{ env.CODE_DIR }}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
         # flake8 ${{ env.CODE_DIR }}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
-    - name: Test with pytest
+    - name: Test with pytest and code coverage with Coverage
       id: test-pytest
       run: |
-        echo -e "${BLUE}[ STEP - TESTING ] > Testing Python code with Pytest.${BLANK}"
+        echo -e "${BLUE}[ STEP - TESTING & COVERAGE ] > Testing Python code with Pytest and code coverage with Coverage.${BLANK}"
         echo -e "${CYAN}[ INFO ] > Pytest version.${BLANK}"
         pytest --version
         echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
@@ -62,30 +67,13 @@ jobs:
         else
           echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above threshold ${COVERAGE_THRESHOLD}%. Tests are ok.${BLANK}"
         fi
-    # - name: Code coverage with coverage
-    #   id: code-coverage
-    #   run: |
-    #     echo -e "${BLUE}[ STEP - COVERAGE ] > Code coverage report with coverage.${BLANK}"
-    #     echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
-    #     coverage --version
-    #     echo -e "${YELLOW}[ EXECUTING ] > Executing coverage report.${BLANK}"
-    #     coverage report -m --omit="${WORKING_DIR}/tests/*"
-    #     COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
-    #     echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
-    #     if [[ ${COV_RATE//%} < ${COVERAGE_THRESHOLD} ]]
-    #     then
-    #       echo -e "${RED}[ FAILURE ] > Code coverage is ${COV_RATE} below threshold ${COVERAGE_THRESHOLD}%. Tests are too weak.${BLANK}"
-    #       exit 1
-    #     else
-    #       echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above threshold ${COVERAGE_THRESHOLD}%. Tests are ok.${BLANK}"
-    #     fi
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
         echo -e "${BLUE}[ STEP - LINTING DOCKERFILE ] > Linting Dockerfile with Hadolint.${BLANK}"
         echo -e "${CYAN}[ INFO ] > Hadolint version.${BLANK}"
         hadolint --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing linting.${BLANK}"
+        echo -e "${YELLOW}[ EXECUTING ] > Executing Dockerfile linting.${BLANK}"
         hadolint ${WORKING_DIR}/Dockerfile --ignore DL3007 --ignore DL3017 --ignore DL3018
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
@@ -93,10 +81,13 @@ jobs:
         fail_ci_if_error: false
 
   build:
-    needs: test
-    runs-on: ubuntu-latest
+    needs: [test]
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/multi-tools-alpine:v1.0
+      image: ${BUILD_IMAGE}
       options: --privileged
     defaults:
       run:
