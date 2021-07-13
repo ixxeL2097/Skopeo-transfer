@@ -16,6 +16,7 @@ env:
   CYAN: \033[1;36m
   BLANK: \033[0m
   WORKING_DIR: resources
+  COVERAGE_TRESHOLD: 85
 
 jobs:
   test:
@@ -59,6 +60,13 @@ jobs:
         coverage report -m --omit="${WORKING_DIR}/tests/*"
         COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
         echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
+        if [[ ${COV_RATE//%} < ${COVERAGE_TRESHOLD} ]]
+        then
+          echo -e "${RED}[ FAILURE ] > Code coverage is ${COV_RATE} below treshold ${COVERAGE_TRESHOLD}%. Tests are too weak.${BLANK}"
+          exit 1
+        else
+          echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above treshold ${COVERAGE_TRESHOLD}%. Tests are ok.${BLANK}"
+        fi
     - name: Lint with Hadolint
       id: lint-hadolint
       run: |
