@@ -52,9 +52,9 @@ jobs:
         echo -e "${YELLOW}[ EXECUTING ] > Executing testing.${BLANK}"
         pytest ${WORKING_DIR}/tests/ --cov-report=xml --cov-report=term-missing --cov=./ --cov-config=.coveragerc
         echo -e "${YELLOW}[ EXECUTING ] > Executing coverage analysis.${BLANK}"
+        coverage report -m --omit="${WORKING_DIR}/tests/* --precision=2
         COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" --precision=2 | grep "TOTAL" | awk -F " " '{print $NF}')
         echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
-        # coverage report -m --omit="${WORKING_DIR}/tests/* --precision=2
         if [[ ${COV_RATE//%} < ${COVERAGE_THRESHOLD} ]]
         then
           echo -e "${RED}[ FAILURE ] > Code coverage is ${COV_RATE} below threshold ${COVERAGE_THRESHOLD}%. Tests are too weak.${BLANK}"
