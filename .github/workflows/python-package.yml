@@ -16,7 +16,7 @@ env:
   CYAN: \033[1;36m
   BLANK: \033[0m
   WORKING_DIR: resources
-  COVERAGE_TRESHOLD: 85
+  COVERAGE_TRESHOLD: 70
 
 jobs:
   test:
