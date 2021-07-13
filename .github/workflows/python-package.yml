@@ -15,8 +15,6 @@ env:
   PURPLE: \033[1;35m
   CYAN: \033[1;36m
   BLANK: \033[0m
-  TEST_IMAGE: ixxel/multi-tools-alpine:v1.0
-  BUILD_IMAGE: ixxel/multi-tools-alpine:v1.0
   WORKING_DIR: resources
   COVERAGE_THRESHOLD: 70
 
@@ -27,7 +25,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ${env.TEST_IMAGE}
+      image: ixxel/multi-tools-alpine:v1.0
     defaults:
       run:
         shell: bash
@@ -87,7 +85,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ${env.BUILD_IMAGE}
+      image: ixxel/multi-tools-alpine:v1.0
       options: --privileged
     defaults:
       run:
