@@ -47,12 +47,20 @@ jobs:
         echo -e "${BLUE}[ STEP - TESTING ] > Testing Python code with Pytest.${BLANK}"
         echo -e "${CYAN}[ INFO ] > Pytest version.${BLANK}"
         pytest --version
+        echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
+        coverage --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing testing.${BLANK}"
         pytest ${WORKING_DIR}/tests/ --cov-report=xml --cov-report=term-missing --cov=./ --cov-config=.coveragerc
         COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" | grep "TOTAL" | awk -F " " '{print $NF}')
         echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
-        coverage report -m --omit="${WORKING_DIR}/tests/* --fail-under=85
-
+        coverage report -m --omit="${WORKING_DIR}/tests/* --precision=2
+        if [[ ${COV_RATE//%} < ${COVERAGE_THRESHOLD} ]]
+        then
+          echo -e "${RED}[ FAILURE ] > Code coverage is ${COV_RATE} below threshold ${COVERAGE_THRESHOLD}%. Tests are too weak.${BLANK}"
+          exit 1
+        else
+          echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above threshold ${COVERAGE_THRESHOLD}%. Tests are ok.${BLANK}"
+        fi
         #coverage run -m --source=. pytest ${WORKING_DIR}/tests
     # - name: Code coverage with coverage
     #   id: code-coverage
