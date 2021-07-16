@@ -137,7 +137,7 @@ jobs:
         skopeo copy --insecure-policy \
                     --format v2s2 \
                     --dest-tls-verify=false \
-                    containers-storage://${PROGRAM_NAME}:${APP_VERSION}  \
+                    containers-storage:/${PROGRAM_NAME}:${APP_VERSION}  \
                     docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
 
         echo -e "${CYAN}[ INFO ] > Verifying upload of image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
