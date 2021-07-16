@@ -134,6 +134,7 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Skopeo version.${BLANK}"
         skopeo --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing transfer.${BLANK}"
+        skopeo login docker.io -u ixxel -p ${{ secrets.DOCKER_IO_PWD }}
         skopeo copy --insecure-policy \
                     --format v2s2 \
                     --dest-tls-verify=false \
