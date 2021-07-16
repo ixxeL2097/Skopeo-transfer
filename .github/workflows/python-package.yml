@@ -136,8 +136,7 @@ jobs:
         echo -e "${YELLOW}[ EXECUTING ] > Executing transfer.${BLANK}"
         skopeo copy --insecure-policy \
                     --format v2s2 \
-                    --dst-tls-verify=false \
-                    --dst-creds ${SRC_CREDS} \
+                    --dest-tls-verify=false \
                     containers-storage://${PROGRAM_NAME}:${APP_VERSION}  \
                     docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
 
