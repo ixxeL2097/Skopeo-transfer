@@ -25,7 +25,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/unit-test:v1.0
+      image: ixxel/unit-test:v1.1
     defaults:
       run:
         shell: bash
