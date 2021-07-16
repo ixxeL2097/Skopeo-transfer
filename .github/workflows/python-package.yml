@@ -25,7 +25,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/multi-tools-alpine:v1.0
+      image: ixxel/unit-test:v1.0
     defaults:
       run:
         shell: bash
@@ -106,10 +106,23 @@ jobs:
         APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
       run: |
         echo -e "${BLUE}[ STEP - BUILDING IMAGE ] > Building docker image with buildah.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Buildah version.${BLANK}"
+        buildah --version
+        echo -e "${CYAN}[ INFO ] > Podman version.${BLANK}"
+        podman --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing build ${APP_VERSION}.${BLANK}"
         buildah bud -t skopeo-transfer:${APP_VERSION} ${WORKING_DIR}
         echo -e "${CYAN}[ INFO ] > Displaying podman built images.${BLANK}"
         podman images
+        echo -e "${YELLOW}[ EXECUTING ] > Checking docker image execution.${BLANK}"
+        podman run --rm -it skopeo-transfer:${APP_VERSION} --version
+        if [[ $? = 0 ]]
+        then
+          echo -e "${GREEN}[ CHECK SUCCESS ] > Docker image working properly.${BLANK}"
+        else
+          echo -e "${RED}[ CHECK FAILED ] > Something wrong with docker image.${BLANK}"
+          exit 1
+        fi
 
   # deliver:
   #   needs: [test, build]
