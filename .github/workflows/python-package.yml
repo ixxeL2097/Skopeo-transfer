@@ -142,8 +142,8 @@ jobs:
                     docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
 
         echo -e "${CYAN}[ INFO ] > Verifying upload of image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
-        skopeo_output=$(skopeo list-tags docker://${REPOSITORY}/${PROGRAM_NAME} --tls-verify=false | jq)
-        echo "$skopeo_output"
+        skopeo_output=$(skopeo list-tags docker://${REPOSITORY}/${PROGRAM_NAME} --tls-verify=false)
+        echo "$skopeo_output" | jq
 
         if [[ $(echo ${skopeo_output} | grep -i -E "${APP_VERSION}") ]]
         then
