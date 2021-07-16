@@ -17,6 +17,8 @@ env:
   BLANK: \033[0m
   WORKING_DIR: resources
   COVERAGE_THRESHOLD: 70
+  PROGRAM_NAME: skopeo-transfer
+  REPOSITORY: ixxel
 
 jobs:
   test:
@@ -111,16 +113,43 @@ jobs:
         echo -e "${CYAN}[ INFO ] > Podman version.${BLANK}"
         podman --version
         echo -e "${YELLOW}[ EXECUTING ] > Executing build ${APP_VERSION}.${BLANK}"
-        buildah bud -t skopeo-transfer:${APP_VERSION} ${WORKING_DIR}
+        buildah bud -t ${PROGRAM_NAME}:${APP_VERSION} ${WORKING_DIR}
         echo -e "${CYAN}[ INFO ] > Displaying podman built images.${BLANK}"
         podman images
         echo -e "${YELLOW}[ EXECUTING ] > Checking docker image execution.${BLANK}"
-        podman run --rm -it skopeo-transfer:${APP_VERSION} --version
+        podman run --rm ${PROGRAM_NAME}:${APP_VERSION} --version
         if [[ $? = 0 ]]
         then
           echo -e "${GREEN}[ CHECK SUCCESS ] > Docker image working properly.${BLANK}"
         else
           echo -e "${RED}[ CHECK FAILED ] > Something wrong with docker image.${BLANK}"
+          exit 1
+        fi
+    - name: Transfer image with Skopeo
+      id: transfer-image
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      run: |
+        echo -e "${BLUE}[ STEP - TRANSFERING IMAGE ] > Transfering docker image with skopeo.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Skopeo version.${BLANK}"
+        skopeo --version
+        echo -e "${YELLOW}[ EXECUTING ] > Executing transfer.${BLANK}"
+        skopeo copy --insecure-policy \
+                    --format v2s2 \
+                    --dst-tls-verify=false \
+                    --dst-creds ${SRC_CREDS} \
+                    containers-storage://${PROGRAM_NAME}:${APP_VERSION}  \
+                    docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
+
+        echo -e "${CYAN}[ INFO ] > Verifying upload of image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
+        skopeo_output=$(skopeo list-tags docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION} --tls-verify=false)
+        echo "$skopeo_output"
+
+        if [[ $(echo ${skopeo_output} | grep -i -E "${APP_VERSION}") ]]
+        then
+          echo -e "${GREEN}[ CHECK SUCCESS ] > Docker image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION} found in repository.${BLANK}"
+        else
+          echo -e "${RED}[ STEP FAILED ] > Something went wrong when uploading the docker image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
           exit 1
         fi
 

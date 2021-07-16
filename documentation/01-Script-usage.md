@@ -1,7 +1,7 @@
 [Main menu](../README.md)
 
 ## 01 - Script usage
-### getImage.py - Transfer images from one registry to another
+### skopeoTransfer.py - Transfer images from one registry to another
 
 In order to make uses of skopeo easier, this script automates transfer of images between registries.
 
@@ -28,6 +28,28 @@ You can also specify a unique flag in combination with all other flags :
 If you want to upload a docker image on your local machine (local docker daemon) you can specify the following flag :
 - `--daemon` : usage `--daemon` Boolean flag which activate the docker daemon transfer, pulling images from your local machine and sending to target.
 
+You can pass a credentials file to provide skopeo your private registries information in order to transfer with the following flag :
+- `--creds` : usage `--creds <path-to-the-credential-file>` (must be a JSON formatted file) just as following ==>
+```json
+{
+    "creds1": {
+        "name": "my-private-registry",
+        "registry": "example.com:5000",
+        "sa": "user",
+        "token": "secret",
+        "ns": ""
+    },
+    "creds2": {
+        "name": "second-registry",
+        "registry": "another-registry.io:5000",
+        "sa": "user",
+        "token": "secret",
+        "ns": ""
+    }
+}
+```
+By default, the script will look for a file named `credentials.json` in the working directory.
+
 Additionally, some environment variables are mandatory as well :
 
 - `SOURCE` : source registry name. **Has to match inside script structure variable name.**
@@ -38,11 +60,11 @@ Additionally, some environment variables are mandatory as well :
 For a classic usage of the script, you need to set first the above environment variables, then you can execute command as follow :
 
 ```shell
-python3 getImage.py --image <image-name-to-transfer>
+python3 skopeoTransfer.py --image <image-name-to-transfer>
 ```
 
 ```shell
-python3 getImage.py --file <path-to-list-images-file>
+python3 skopeoTransfer.py --file <path-to-list-images-file>
 ```
 
 However, it's recommended to use Docker wrapped script commands are described below.
@@ -71,6 +93,7 @@ However, it's recommended to use Docker wrapped script commands are described be
 | `--release`                | [optional] specific release to use with `--update` (ex: 3.1, 4.0, 7.9...)                |
 | `--public`                 | [optional] boolean specifying that pulled image(s) are from public registry              |
 | `--daemon`                 | [optional] boolean specifying that transfered image(s) are from local docker daemon      |
+| `--creds`                  | [optional] path to the JSON credentials file                                             |
 <!-- markdownlint-enable MD038 -->
 
 
@@ -82,6 +105,7 @@ docker run --rm -it --name skopeo --network=host \
            -e DST_NAMESPACE=<destination-namespace> \
            -e SOURCE=<source-registry> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --image <IMAGE-TO-TRANSFER>
 ```
@@ -92,6 +116,7 @@ docker run --rm -it --name skopeo --network=host \
 docker run --rm -it --name skopeo --network=host \
            -e DST_NAMESPACE=<destination-namespace> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --image <IMAGE-TO-TRANSFER> \
            --public
@@ -104,6 +129,7 @@ docker run --rm -it --name skopeo --network=host \
            -v /var/run/docker.sock:/var/run/docker.sock \
            -e DST_NAMESPACE=<destination-namespace> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --image <IMAGE-TO-TRANSFER> \
            --daemon
@@ -126,6 +152,7 @@ docker run --rm -it --name skopeo --network=host \
            -e DST_NAMESPACE=<destination-namespace> \
            -e SOURCE=<source-registry> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --file /app/list/<file-name>
 ```
@@ -138,6 +165,7 @@ docker run --rm -it --name skopeo --network=host \
            -e DST_NAMESPACE=<destination-namespace> \
            -e SOURCE=<source-registry> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --update <img1> <img2> <imgn>
 ```
@@ -150,6 +178,7 @@ docker run --rm -it --name skopeo --network=host \
            -e DST_NAMESPACE=<destination-namespace> \
            -e SOURCE=<source-registry> \
            -e TARGET=<target-registry> \
+           -v <path-to-crendtials>:/app:ro \
            <SKOPEO-IMAGE-NAME> \
            --update <img1> <img2> <imgn>
            --release 4.0
@@ -346,10 +375,40 @@ Here is the nethost wrapper script:
 #########################################################################
 #########################################################################
 
-# v4.4.3
+#######################################################################################################################################
+################################################ USAGE EXAMPLES #######################################################################
+#######################################################################################################################################
+# classic transfer :     ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> my-image:1.0
+# public transfer :      ./getImage-hostnet.sh <target> <dst-ns> bitnami/mysql:5.7 public
+# daemon transfer :      ./getImage-hostnet.sh <target> <dst-ns> skopeo-script-py:4.4.1 daemon
+# file list transfer :   ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> 
+# update latest :        ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> alpine-git,alpine-skopeo,alpine-argocd-cli
+# update specific :      ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> alpine-git, 3.2
+#######################################################################################################################################
+
+## WARNING ==> You need to have a 'credentials.json' file in your current directory. This file must contain your repositories information as per below :
+# example :
+# {
+#     "creds1": {
+#         "name": "repo",
+#         "registry": "docker.io",
+#         "sa": "user",
+#         "token": "secret",
+#         "ns": ""
+#     },
+#     "creds2": {
+#         "name": "repo",
+#         "registry": "docker.io",
+#         "sa": "user",
+#         "token": "secret",
+#         "ns": ""
+#     }
+# }
+
+# v5.0.0
 
 # SKOPEO VERSION IMAGE EXECUTED
-SKOPEO_IMG=skopeo-script-py:4.4.3
+SKOPEO_IMG=skopeo-script-py:5.0.0
 
 # PROGRAM PARAMETERS
 SRC=$1
@@ -365,11 +424,12 @@ TAG_POLICY=""           # Valid are : pep440 (default) or pep440_latest
 
 # FILE TRANSFER PARAMETERS
 HOST_LIST_PATH=/home/fred/Documents
-LIST_FILE=list.images2
+LIST_FILE=list.images
+CREDS_PATH=$(pwd)
 
 if [[ ${!#} = "public" ]] && [[ $# -gt 2 ]]
 then
-    if [[ ! -z $6  ]]
+    if [[ -n $6  ]]
     then
         echo "[ ERROR ] >> Too many arguments for 'Public' transfer mode. Please execute script without SOURCE (SRC) and SOURCE_NAMESPACE (SRC_NS) variables."
         exit 1
@@ -383,7 +443,7 @@ then
     fi
 elif [[ ${!#} = "daemon" ]] && [[ $# -gt 2 ]]
 then
-    if [[ ! -z $6  ]]
+    if [[ -n $6  ]]
     then
         echo "[ ERROR ] >> Too many arguments for 'Daemon' transfer mode. Please execute script without SOURCE (SRC) and SOURCE_NAMESPACE (SRC_NS) variables."
         exit 1
@@ -408,67 +468,71 @@ else
     echo "[ INFO ] >> Processing transfer from a PRIVATE registry."
 fi
 
-if [[ ! -z $IMAGE ]] && [[ $IMAGE != "public" ]] && [[ $IMAGE != "daemon" ]]
+if [[ -n $IMAGE ]] && [[ $IMAGE != "public" ]] && [[ $IMAGE != "daemon" ]]
 then
     if [[ ! $IMAGE =~ "," ]]
     then
         docker run --rm -it --name skopeo --network=host \
-                $SOCKET \
-                -e SOURCE=$SRC \
-                -e SRC_NAMESPACE=$SRC_NS \
-                -e DST_NAMESPACE=$DST_NS \
-                -e TARGET=$DST \
-                -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                -e TAG_POLICY=$TAG_POLICY \
-                $SKOPEO_IMG \
-                --image $IMAGE \
-                $MODE
+                "$SOCKET" \
+                -e SOURCE="$SRC" \
+                -e SRC_NAMESPACE="$SRC_NS" \
+                -e DST_NAMESPACE="$DST_NS" \
+                -e TARGET="$DST" \
+                -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
+                -e TAG_POLICY="$TAG_POLICY" \
+                -v "$CREDS_PATH":/app:ro \
+                "$SKOPEO_IMG" \
+                --image "$IMAGE" \
+                "$MODE"
     elif [[ $IMAGE =~ "," ]]
     then
-        if [[ ! -z $RELEASE ]] && [[ $RELEASE != "public" ]] && [[ $RELEASE != "daemon" ]]
+        if [[ -n $RELEASE ]] && [[ $RELEASE != "public" ]] && [[ $RELEASE != "daemon" ]]
         then
             IMAGES=${IMAGE//,/ }
             docker run --rm -it --name skopeo --network=host \
-                    $SOCKET \
-                    -e SOURCE=$SRC \
-                    -e SRC_NAMESPACE=$SRC_NS \
-                    -e DST_NAMESPACE=$DST_NS \
-                    -e TARGET=$DST \
-                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                    -e TAG_POLICY=$TAG_POLICY \
-                    $SKOPEO_IMG \
-                    --update $IMAGES \
-                    --release $RELEASE \
-                    $MODE
+                    "$SOCKET" \
+                    -e SOURCE="$SRC" \
+                    -e SRC_NAMESPACE="$SRC_NS" \
+                    -e DST_NAMESPACE="$DST_NS" \
+                    -e TARGET="$DST" \
+                    -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
+                    -e TAG_POLICY="$TAG_POLICY" \
+                    -v "$CREDS_PATH":/app:ro \
+                    "$SKOPEO_IMG" \
+                    --update "$IMAGES" \
+                    --release "$RELEASE" \
+                    "$MODE"
         else
             IMAGES=${IMAGE//,/ }
             docker run --rm -it --name skopeo --network=host \
-                    $SOCKET \
-                    -e SOURCE=$SRC \
-                    -e SRC_NAMESPACE=$SRC_NS \
-                    -e DST_NAMESPACE=$DST_NS \
-                    -e TARGET=$DST \
-                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                    -e TAG_POLICY=$TAG_POLICY \
-                    $SKOPEO_IMG \
-                    --update $IMAGES \
-                    $MODE
+                    "$SOCKET" \
+                    -e SOURCE="$SRC" \
+                    -e SRC_NAMESPACE="$SRC_NS" \
+                    -e DST_NAMESPACE="$DST_NS" \
+                    -e TARGET="$DST" \
+                    -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
+                    -e TAG_POLICY="$TAG_POLICY" \
+                    -v "$CREDS_PATH":/app:ro \
+                    "$SKOPEO_IMG" \
+                    --update "$IMAGES" \
+                    "$MODE"
         fi
     fi
 elif [ -f "$HOST_LIST_PATH/$LIST_FILE" ]
 then
     docker run --rm -it --name skopeo --network=host \
-               $SOCKET \
-               -e SOURCE=$SRC \
-               -e SRC_NAMESPACE=$SRC_NS \
-               -e DST_NAMESPACE=$DST_NS \
-               -e TARGET=$DST \
-               -v $HOST_LIST_PATH:/app/list:ro \
-               -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-               -e TAG_POLICY=$TAG_POLICY \
-               $SKOPEO_IMG \
-               --file /app/list/$LIST_FILE \
-               $MODE
+               "$SOCKET" \
+               -e SOURCE="$SRC" \
+               -e SRC_NAMESPACE="$SRC_NS" \
+               -e DST_NAMESPACE="$DST_NS" \
+               -e TARGET="$DST" \
+               -v "$HOST_LIST_PATH":/app/list:ro \
+               -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
+               -e TAG_POLICY="$TAG_POLICY" \
+               -v "$CREDS_PATH":/app:ro \
+               "$SKOPEO_IMG" \
+               --file /app/list/"$LIST_FILE" \
+               "$MODE"
 else
     echo "[ ERROR ] >> either image parameter $IMAGE is null, or no such file or directory $HOST_LIST_PATH/$LIST_FILE provided"
 fi
