@@ -40,7 +40,7 @@
 # v5.0.0
 
 # SKOPEO VERSION IMAGE EXECUTED
-SKOPEO_IMG=skopeo-script-py:5.0.0
+SKOPEO_IMG=skopeo-transfer:latest
 
 # PROGRAM PARAMETERS
 SRC=$1
@@ -104,67 +104,68 @@ if [[ -n $IMAGE ]] && [[ $IMAGE != "public" ]] && [[ $IMAGE != "daemon" ]]
 then
     if [[ ! $IMAGE =~ "," ]]
     then
+        echo "transfer standard"
         docker run --rm -it --name skopeo --network=host \
-                "$SOCKET" \
-                -e SOURCE="$SRC" \
-                -e SRC_NAMESPACE="$SRC_NS" \
-                -e DST_NAMESPACE="$DST_NS" \
-                -e TARGET="$DST" \
-                -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
-                -e TAG_POLICY="$TAG_POLICY" \
-                -v "$CREDS_PATH":/app:ro \
-                "$SKOPEO_IMG" \
-                --image "$IMAGE" \
-                "$MODE"
+                $SOCKET \
+                -e SOURCE=$SRC \
+                -e SRC_NAMESPACE=$SRC_NS \
+                -e DST_NAMESPACE=$DST_NS \
+                -e TARGET=$DST \
+                -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
+                -e TAG_POLICY=$TAG_POLICY \
+                -v $CREDS_PATH:/app:ro \
+                $SKOPEO_IMG \
+                --image $IMAGE \
+                $MODE
     elif [[ $IMAGE =~ "," ]]
     then
         if [[ -n $RELEASE ]] && [[ $RELEASE != "public" ]] && [[ $RELEASE != "daemon" ]]
         then
             IMAGES=${IMAGE//,/ }
             docker run --rm -it --name skopeo --network=host \
-                    "$SOCKET" \
-                    -e SOURCE="$SRC" \
-                    -e SRC_NAMESPACE="$SRC_NS" \
-                    -e DST_NAMESPACE="$DST_NS" \
-                    -e TARGET="$DST" \
-                    -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
-                    -e TAG_POLICY="$TAG_POLICY" \
-                    -v "$CREDS_PATH":/app:ro \
-                    "$SKOPEO_IMG" \
-                    --update "$IMAGES" \
-                    --release "$RELEASE" \
-                    "$MODE"
+                    $SOCKET \
+                    -e SOURCE=$SRC \
+                    -e SRC_NAMESPACE=$SRC_NS \
+                    -e DST_NAMESPACE=$DST_NS \
+                    -e TARGET=$DST \
+                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
+                    -e TAG_POLICY=$TAG_POLICY \
+                    -v $CREDS_PATH:/app:ro \
+                    $SKOPEO_IMG \
+                    --update $IMAGES \
+                    --release $RELEASE \
+                    $MODE
         else
             IMAGES=${IMAGE//,/ }
             docker run --rm -it --name skopeo --network=host \
-                    "$SOCKET" \
-                    -e SOURCE="$SRC" \
-                    -e SRC_NAMESPACE="$SRC_NS" \
-                    -e DST_NAMESPACE="$DST_NS" \
-                    -e TARGET="$DST" \
-                    -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
-                    -e TAG_POLICY="$TAG_POLICY" \
-                    -v "$CREDS_PATH":/app:ro \
-                    "$SKOPEO_IMG" \
-                    --update "$IMAGES" \
-                    "$MODE"
+                    $SOCKET \
+                    -e SOURCE=$SRC \
+                    -e SRC_NAMESPACE=$SRC_NS \
+                    -e DST_NAMESPACE=$DST_NS \
+                    -e TARGET=$DST \
+                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
+                    -e TAG_POLICY=$TAG_POLICY \
+                    -v $CREDS_PATH:/app:ro \
+                    $SKOPEO_IMG \
+                    --update $IMAGES \
+                    $MODE
         fi
     fi
 elif [ -f "$HOST_LIST_PATH/$LIST_FILE" ]
 then
     docker run --rm -it --name skopeo --network=host \
-               "$SOCKET" \
-               -e SOURCE="$SRC" \
-               -e SRC_NAMESPACE="$SRC_NS" \
-               -e DST_NAMESPACE="$DST_NS" \
-               -e TARGET="$DST" \
-               -v "$HOST_LIST_PATH":/app/list:ro \
-               -e MANIFEST_FORMAT="$MANIFEST_FORMAT" \
-               -e TAG_POLICY="$TAG_POLICY" \
-               -v "$CREDS_PATH":/app:ro \
-               "$SKOPEO_IMG" \
-               --file /app/list/"$LIST_FILE" \
-               "$MODE"
+               $SOCKET \
+               -e SOURCE=$SRC \
+               -e SRC_NAMESPACE=$SRC_NS \
+               -e DST_NAMESPACE=$DST_NS \
+               -e TARGET=$DST \
+               -v $HOST_LIST_PATH:/app/list:ro \
+               -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
+               -e TAG_POLICY=$TAG_POLICY \
+               -v $CREDS_PATH:/app:ro \
+               $SKOPEO_IMG \
+               --file /app/list/$LIST_FILE \
+               $MODE
 else
     echo "[ ERROR ] >> either image parameter $IMAGE is null, or no such file or directory $HOST_LIST_PATH/$LIST_FILE provided"
 fi
