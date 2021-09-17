@@ -17,7 +17,7 @@ class MyTest(unittest.TestCase):
             "api": "",
             "registry": "docker.io",
             "sa": "ixxel",
-            "token": "d452509d-acee-4d3a-8fc2-a15735fb43a1",
+            "token": "2794d8ea-0fa5-4039-8036-9bc85f3765af",
             "ns": "ixxel"
         },
         "creds2" : {
@@ -25,7 +25,7 @@ class MyTest(unittest.TestCase):
             "api": "",
             "registry": "docker.io",
             "sa": "ixxel",
-            "token": "d452509d-acee-4d3a-8fc2-a15735fb43a1",
+            "token": "2794d8ea-0fa5-4039-8036-9bc85f3765af",
             "ns": "ixxel"
         },
         "fail1" : {
@@ -33,7 +33,7 @@ class MyTest(unittest.TestCase):
             "api": "",
             "registry": "docker.io",
             "sa": "fail",
-            "token": "d452509d-acee-4d3a-8fc2-a15735fb43a1",
+            "token": "2794d8ea-0fa5-4039-8036-9bc85f3765af",
             "ns": "ixxel"
         },
         "public" : {
