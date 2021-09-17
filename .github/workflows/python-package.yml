@@ -27,7 +27,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/unit-test:v1.1
+      image: ixxel/unit-tests-alpine:latest
     defaults:
       run:
         shell: bash
@@ -87,7 +87,7 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     container: 
-      image: ixxel/multi-tools-alpine:v1.0
+      image: ixxel/multi-tools-alpine:latest
       options: --privileged
     defaults:
       run:
@@ -133,13 +133,20 @@ jobs:
         echo -e "${BLUE}[ STEP - TRANSFERING IMAGE ] > Transfering docker image with skopeo.${BLANK}"
         echo -e "${CYAN}[ INFO ] > Skopeo version.${BLANK}"
         skopeo --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing transfer.${BLANK}"
+        echo -e "${YELLOW}[ EXECUTING ] > Executing ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION} transfer.${BLANK}"
         skopeo login docker.io -u ixxel -p ${{ secrets.DOCKER_IO_PWD }}
         skopeo copy --insecure-policy \
                     --format v2s2 \
                     --dest-tls-verify=false \
                     containers-storage:localhost/${PROGRAM_NAME}:${APP_VERSION} \
                     docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
+
+        echo -e "${YELLOW}[ EXECUTING ] > Executing ${REPOSITORY}/${PROGRAM_NAME}:latest transfer.${BLANK}"
+        skopeo copy --insecure-policy \
+                    --format v2s2 \
+                    --dest-tls-verify=false \
+                    containers-storage:localhost/${PROGRAM_NAME}:${APP_VERSION} \
+                    docker://${REPOSITORY}/${PROGRAM_NAME}:latest
 
         echo -e "${CYAN}[ INFO ] > Verifying upload of image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
         skopeo_output=$(skopeo list-tags docker://${REPOSITORY}/${PROGRAM_NAME} --tls-verify=false)
