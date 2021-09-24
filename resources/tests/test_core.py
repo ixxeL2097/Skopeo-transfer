@@ -44,8 +44,8 @@ class MyTest(unittest.TestCase):
         },
         'local' : {
             "name": "local",
-            "registry": "var",
-            "ns": "lib"
+            "registry": "localhost",
+            "ns": "default"
         }
     }
 
@@ -123,6 +123,8 @@ class MyTest(unittest.TestCase):
 
     def test_full_single_get_latest(self):
         # Context
+        os.mkdir('/localhost')
+        os.mkdir('/localhost/default')
         parser = self.create_parser()
         args = parser.parse_args(['update', 'alpine', '--public', '--dst-mode', 'dir'])
         credentials = self.credentials
