@@ -323,6 +323,14 @@ def file_update_process(args, credentials, source, target):
     else:
         update_releases(args, source, target, args.update)
 
+def prepare_transfer(args, credentials):
+    set_manifest_format(args)
+    set_global_parameters(global_params)
+    source, target = define_endpoints(credentials, args)
+    set_transfer_modes(args)
+    skopeolib.skopeo_version()
+    return source, target
+
 ############################################################################
 ################################### Main ###################################
 ############################################################################
@@ -337,12 +345,13 @@ def main():
     credentials['public'] = public
     credentials['local'] = local
 
-    set_manifest_format(args)
-    set_global_parameters(global_params)
-    source, target = define_endpoints(credentials, args)
-    set_transfer_modes(args)
+    # set_manifest_format(args)
+    # set_global_parameters(global_params)
+    # source, target = define_endpoints(credentials, args)
+    # set_transfer_modes(args)
 
-    skopeolib.skopeo_version()
+    # skopeolib.skopeo_version()
+    source, target = prepare_transfer(args, credentials)
     args.func(args, credentials, source, target)
 
     end = timer()
