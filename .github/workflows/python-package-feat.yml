@@ -1,0 +1,138 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: CI-feat
+on:
+  push:
+    branches: [ feat/v6.0.0 ]
+  pull_request:
+    branches: [ feat/v6.0.0 ]
+env:
+  RED: \033[1;31m
+  GREEN: \033[1;32m
+  YELLOW: \033[1;33m
+  BLUE: \033[1;34m
+  PURPLE: \033[1;35m
+  CYAN: \033[1;36m
+  BLANK: \033[0m
+  WORKING_DIR: resources
+  COVERAGE_THRESHOLD: 70
+  PROGRAM_NAME: skopeo-transfer
+  REPOSITORY: ixxel
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    container: 
+      image: ixxel/unit-tests-alpine:latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      CODE_DIR: resources
+    steps:
+    - uses: actions/checkout@v2
+    - name: Lint with flake8
+      id: lint-flake
+      run: |
+        echo -e "${BLUE}[ STEP - LINTING CODE ] > Linting Python code with Flake8.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Flake8 version.${BLANK}"
+        flake8 --version
+        echo -e "${YELLOW}[ EXECUTING ] > Executing code linting.${BLANK}"
+        flake8 ${WORKING_DIR}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
+        flake8 ${WORKING_DIR}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
+        # flake8 ${{ env.CODE_DIR }}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
+        # flake8 ${{ env.CODE_DIR }}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
+    - name: Test with pytest and code coverage with Coverage
+      id: test-pytest
+      run: |
+        echo -e "${BLUE}[ STEP - TESTING & COVERAGE ] > Testing Python code with Pytest and code coverage with Coverage.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Pytest version.${BLANK}"
+        pytest --version
+        echo -e "${CYAN}[ INFO ] > Coverage version.${BLANK}"
+        coverage --version
+        echo -e "${YELLOW}[ EXECUTING ] > Executing testing.${BLANK}"
+        pytest ${WORKING_DIR}/tests/ --cov-report=xml --cov=./ --cov-config=.coveragerc
+        echo -e "${YELLOW}[ EXECUTING ] > Executing coverage analysis.${BLANK}"
+        coverage report -m --omit="${WORKING_DIR}/tests/*" --precision=2
+        COV_RATE=$(coverage report -m --omit="${WORKING_DIR}/tests/*" --precision=2 | grep "TOTAL" | awk -F " " '{print $NF}')
+        echo -e "${CYAN}[ INFO ] > Code coverage is ${COV_RATE}.${BLANK}"
+        if [[ ${COV_RATE//%} < ${COVERAGE_THRESHOLD} ]]
+        then
+          echo -e "${RED}[ FAILURE ] > Code coverage is ${COV_RATE} below threshold ${COVERAGE_THRESHOLD}%. Tests are too weak.${BLANK}"
+          exit 1
+        else
+          echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above threshold ${COVERAGE_THRESHOLD}%. Tests are ok.${BLANK}"
+        fi
+    - name: Lint with Hadolint
+      id: lint-hadolint
+      run: |
+        echo -e "${BLUE}[ STEP - LINTING DOCKERFILE ] > Linting Dockerfile with Hadolint.${BLANK}"
+        echo -e "${CYAN}[ INFO ] > Hadolint version.${BLANK}"
+        hadolint --version
+        echo -e "${YELLOW}[ EXECUTING ] > Executing Dockerfile linting.${BLANK}"
+        hadolint ${WORKING_DIR}/Dockerfile --ignore DL3007 --ignore DL3017 --ignore DL3018
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        fail_ci_if_error: false
+
+  build:
+    needs: [test]
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    container: 
+      image: ixxel/multi-tools-alpine:latest
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v2
+    - name: Fetch image version
+      id: fetch-version
+      run: |
+        echo -e "${BLUE}[ STEP - FETCHING VERSION ] > Fetching docker image version from script.${BLANK}"
+        echo -e "${YELLOW}[ EXECUTING ] > Executing fetching.${BLANK}"
+        APP_VERSION=$(python3 ${WORKING_DIR}/skopeoTransfer.py --version | grep -Eo "[0-9]+.{1,4}")
+        echo ::set-output name=APP_VERSION::${APP_VERSION}
+        echo -e "${CYAN}[ INFO ] > Script version is ${APP_VERSION}.${BLANK}"
+    - name: Build docker image with buildah
+      id: build-image
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/buildah-bud@main
+      with:
+        tag: '${PROGRAM_NAME}:${APP_VERSION}'
+        file: '""'
+        format: 'oci'
+        build-arg: ''
+        working-dir: '${WORKING_DIR}'
+    - name: Archive docker image for CVE scan
+      id: archive-image
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/buildah-push@main
+      with:
+        image-id: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
+        transport: 'oci-archive'
+        destination: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
+        format: '""'
+    - name: Security scan for docker image
+      id: scan-image
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/grype-scan@main
+      with:
+        image-ref: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
+        transport: 'oci-archive'
+        fail-on: '""'
+        output: 'table'
+        scope: 'AllLayers'
+        template: '""'
+        verbose: ''
