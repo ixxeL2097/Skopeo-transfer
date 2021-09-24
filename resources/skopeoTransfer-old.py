@@ -71,47 +71,22 @@ class bcolors:
     CYAN = '\033[36m'
 
 def parse():
-    parser = argparse.ArgumentParser(prog='skopeoTransfer', description='Transfer docker image(s) from one repository to another with skopeo')
-    subparsers = parser.add_subparsers(help='sub-command help', dest='command')
-    sub_img = subparsers.add_parser('img', help='Single named image transfer mode')
-    sub_file = subparsers.add_parser('file', help='Multiple transfer mode from file')
-    sub_update = subparsers.add_parser('update', help='Update transfer mode')
-    # GENERAL arguments
+    parser = argparse.ArgumentParser(description='Transfer docker image(s) from one repository to another with skopeo')
+    exlusive = parser.add_mutually_exclusive_group(required=True)
+    exlusive.add_argument('--image', type=str, help='Name of the docker image to transfer')
+    exlusive.add_argument('--file', type=argparse.FileType('r'), help='List of docker images to transfer. Must be a file.')
+    exlusive.add_argument('--update', nargs="*", type=str, help='Update latest img releases from one registry to another')
+    parser.add_argument('--release', type=str, help='Release of the images to update. Exemple : 3.2 will download all 3.2.x')
+    parser.add_argument('--public', default=False, action='store_true', help='download from a public registry')
+    parser.add_argument('--src', type=str, help='source name')
+    parser.add_argument('--dst', type=str, help='destination name')
+    parser.add_argument('--src-ns', type=str, help='namespace for source')
+    parser.add_argument('--dst-ns', type=str, help='namespace for destination')
+    parser.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
+    parser.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
     parser.add_argument('--format', type=str, default='v2s2', choices=['v2s2','v2s1','oci'], help='Manifest type (oci, v2s1, or v2s2) to use in the destination (default is manifest type of source, with fallbacks)')
     parser.add_argument('--creds', type=str, default='credentials.json', help='Path of the json file for registries credentials')
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
-    # IMG arguments
-    sub_img.set_defaults(func=img_transfer_process)
-    sub_img.add_argument('image', type=str, help='Name of the docker image to transfer')
-    sub_img.add_argument('--public', default=False, action='store_true', help='download from a public registry')
-    sub_img.add_argument('--src', type=str, help='source name')
-    sub_img.add_argument('--dst', type=str, help='destination name')
-    sub_img.add_argument('--src-ns', type=str, help='namespace for source')
-    sub_img.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_img.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_img.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
-    # FILE arguments
-    sub_file.set_defaults(func=file_transfer_process)
-    sub_file.add_argument('file', type=argparse.FileType('r'), help='List of docker images to transfer. Must be a file.')
-    sub_file.add_argument('--public', default=False, action='store_true', help='download from a public registry')
-    sub_file.add_argument('--src', type=str, help='source name')
-    sub_file.add_argument('--dst', type=str, help='destination name')
-    sub_file.add_argument('--src-ns', type=str, help='namespace for source')
-    sub_file.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_file.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_file.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
-    # UPDATE arguments
-    sub_update.set_defaults(func=file_update_process)
-    sub_update.add_argument('update', nargs="+", type=str, help='Update latest img releases from one registry to another')
-    sub_update.add_argument('--public', default=False, action='store_true', help='download from a public registry')
-    sub_update.add_argument('--src', type=str, help='source name')
-    sub_update.add_argument('--dst', type=str, help='destination name')
-    sub_update.add_argument('--src-ns', type=str, help='namespace for source')
-    sub_update.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_update.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_update.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
-    sub_update.add_argument('--release', type=str, help='Release of the images to update. Exemple : 3.2 will download all 3.2.x')
-
     args = parser.parse_args()
     return args
 
@@ -162,6 +137,14 @@ def set_manifest_format(args):
         print(f"{bcolors.CYAN}[ SKOPEO PARAMETERS ] > Specific manifest format version provided and set : {getattr(args, 'format')}.{bcolors.ENDC}")
     skopeolib.manifest_version = getattr(args, 'format')
 
+def set_namespaces_values(source, target, args):
+    # source.update({'ns': re.sub(invisible_char, '', str(os.environ.get('SRC_NS')))})
+    # target.update({'ns': re.sub(invisible_char, '', str(os.environ.get('DST_NS')))})
+    if getattr(args, 'src_ns') is not None:
+        source.update({'ns': getattr(args, 'src_ns')})
+    if getattr(args, 'dst_ns') is not None:
+        target.update({'ns': getattr(args, 'dst_ns')})
+
 def set_transport_mode_format(transport_mode):
     if transport_mode == 'docker':
         transport_mode = f"{transport_mode}://"
@@ -207,8 +190,7 @@ def get_tags(img, source, release=None):
 
     if len(tags_list) >= 1:
         str_tags_list = convert_bytes_list_to_clean_str_list(tags_list)
-        #cleaned_tags = map(lambda x: comply_tag(str_tags_list[x]), range(1, len(str_tags_list) - 1, 1))
-        cleaned_tags = map(lambda x: comply_tag(str_tags_list[x]), range(0, len(str_tags_list), 1))
+        cleaned_tags = map(lambda x: comply_tag(str_tags_list[x]), range(1, len(str_tags_list) - 1, 1))
         purged_tags = filter(None, cleaned_tags)
         final_tags_list = list(purged_tags)
         if len(final_tags_list) == 0:
@@ -241,11 +223,11 @@ def get_latest_release(img, source, release=None):
         print(f'{bcolors.HEADER}[ SORTING ] >> {img} latest tag is {img}:{cleaned_tags}{bcolors.ENDC}')
         return f'{img}:{cleaned_tags}'
 
-def update_releases(args, source, target, docker_images, release=None):
+def update_releases(source, target, docker_images, release=None):
     releases_map = map(lambda x: get_latest_release(x, source, release), docker_images)
     latest_releases = list(releases_map)
     print(f'{bcolors.OKBLUE}[ SKOPEO ] > LATEST RELEASES TO TRANSFER ARE {latest_releases}{bcolors.ENDC}')
-    skopeo_multiple_transfer(latest_releases, args.src_mode, args.dst_mode, source, target)
+    skopeo_multiple_transfer(source, target, latest_releases)
 
 def skopeo_single_transfer(source, target, src_mode, dst_mode, image):
     img_split = image.split('/')
@@ -254,7 +236,7 @@ def skopeo_single_transfer(source, target, src_mode, dst_mode, image):
         src_img = f'{image}'
         dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
         print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING SINGLE IMAGE FROM [[ {src_img} ]] to [[ {dst_img} ]]{bcolors.ENDC}')
-        skopeolib.skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target)
+        skopeolib.skopeo_copy(src_img, img_only, src_mode, dst_mode, source, target)
     else:
         src_img = f'{source.get("registry")}/{source.get("ns")}/{image}'
         dst_img = f'{target.get("registry")}/{target.get("ns")}/{image}'
@@ -265,12 +247,17 @@ def skopeo_single_transfer(source, target, src_mode, dst_mode, image):
 def skopeo_multiple_transfer(data, src_mode, dst_mode, source, target):
     if source.get("name") == "docker-hub":
         print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING MULTIPLE IMAGES FROM [[ Docker Hub ]] to [[ {target.get("registry")}/{target.get("ns")} ]]{bcolors.ENDC}')
+        # skopeolib.multi_pull_from_public_registry(data)
+        # for key, value in enumerate(data):
+        #     img_split = value.split('/')
+        #     data[key] = img_split[-1]
         skopeolib.skopeo_multiple_copy(data, src_mode, dst_mode, source, target)
+        #skopeolib.multi_push_to_private_registry(data, target)
     else:
         print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING MULTIPLE IMAGES FROM [[ {source.get("registry")}/{source.get("ns")} ]] to [[ {target.get("registry")}/{target.get("ns")} ]]{bcolors.ENDC}')
         skopeolib.skopeo_multiple_copy(data, src_mode, dst_mode, source, target)
 
-def load_cred_endpoint(credentials, args, endpoint_name):
+def load_cred_endpoint(args, endpoint_name):
     try:
         endpoint = credentials[getattr(args, endpoint_name)]
     except KeyError as err:
@@ -289,39 +276,103 @@ def update_endpoint_namespace(endpoint, args, value):
         endpoint.update({'ns': getattr(args, value)})
 
 def define_endpoints(credentials, args):
-    if getattr(args, 'public'):
-        source = public
-        if is_endpoint_transport_remote(args, 'dst_mode'):
-            print(f'{bcolors.HEADER}[ DEBUG - IMG ] > PUBLIC --> PRIVATE {bcolors.ENDC}')
-            target = load_cred_endpoint(credentials, args, 'dst')
+    if getattr(args, 'file') is not None:
+        if getattr(args, 'src') is None:
+            source = public
+            if is_endpoint_transport_remote(args, 'dst_mode'):
+                target = load_cred_endpoint(args, 'dst')
+            else:
+                target = local
+            update_endpoint_namespace(target, args, 'dst_ns')
+            return source, target
         else:
-            print(f'{bcolors.HEADER}[ DEBUG - IMG ] > PUBLIC --> LOCAL {bcolors.ENDC}')
-            target = local
-        update_endpoint_namespace(target, args, 'dst_ns')
-        return source, target
+            source = load_cred_endpoint(args, 'src')
+            if is_endpoint_transport_remote(args, 'dst_mode'):
+                target = load_cred_endpoint(args, 'dst')
+            else:
+                target = local
+            update_endpoint_namespace(source, args, 'src_ns')
+            update_endpoint_namespace(target, args, 'dst_ns')
+            return source, target
     else:
-        source = load_cred_endpoint(credentials, args, 'src')
-        if is_endpoint_transport_remote(args, 'dst_mode'):
-            print(f'{bcolors.HEADER}[ DEBUG - IMG ] > PRIVATE --> PRIVATE {bcolors.ENDC}')
-            target = load_cred_endpoint(credentials, args, 'dst')
+        if getattr(args, 'src') is None:
+            if is_endpoint_transport_remote(args, 'src_mode'):
+                source = public
+                if is_endpoint_transport_remote(args, 'dst_mode'):
+                    target = load_cred_endpoint(args, 'dst')
+                else:
+                    target = local
+                update_endpoint_namespace(target, args, 'dst_ns')
+                return source, target
+            else:
+                source = local
+                if is_endpoint_transport_remote(args, 'dst_mode'):
+                    target = load_cred_endpoint(args, 'dst')
+                else:
+                    target = local
+                update_endpoint_namespace(source, args, 'src_ns')
+                update_endpoint_namespace(target, args, 'dst_ns')
+                return source, target
+        elif getattr(args, 'src') is not None:
+            pass             
+        
+
+    # if getattr(args, 'src') is None and getattr(args, 'dst') is None:
+    #     print(f"{bcolors.FAIL}[ ERROR ] >> No SOURCE/TARGET options were provided, please set at least one of them.{bcolors.ENDC}")
+    #     sys.exit(1)
+    # elif getattr(args, 'src') is None:
+    #     source = public
+    #     try:
+    #         target = credentials[getattr(args, 'dst')]
+    #     except KeyError as err:
+    #         print(f"{bcolors.FAIL}[ ERROR ] >> {err} is not a valid TARGET options (--dst). Please check your {args.creds} file.{bcolors.ENDC}")
+    #         sys.exit(1)
+    # elif getattr(args, 'dst') is None:
+    #     target = public
+    #     try:
+    #         source = credentials[getattr(args, 'src')]
+    #     except KeyError as err:
+    #         print(f"{bcolors.FAIL}[ ERROR ] >> {err} is not a valid SOURCE options (--src). Please check your {args.creds} file.{bcolors.ENDC}")
+    #         sys.exit(1)
+    # else:
+    #     try:
+    #         source = credentials[getattr(args, 'src')]
+    #         target = credentials[getattr(args, 'dst')]
+    #     except KeyError as err:
+    #         print(f"{bcolors.FAIL}[ ERROR ] >> {err} is not a valid SOURCE/TARGET options (--src/--dst). Please check your {args.creds} file.{bcolors.ENDC}")
+    #         sys.exit(1)
+
+    # if getattr(args, 'src_mode') == 'docker-daemon' or getattr(args, 'src_mode') == 'containers-storage' or getattr(args, 'src_mode') == 'dir':
+    #     print(f'{bcolors.HEADER}[ WARNING ] > Ignoring SOURCE information since mode is either [docker-daemon] or [containers-storage].{bcolors.ENDC}')
+    #     source = neutral
+    # elif getattr(args, 'dst_mode') == 'docker-daemon' or getattr(args, 'src_mode') == 'containers-storage' or getattr(args, 'dst_mode') == 'dir':
+    #     print(f'{bcolors.HEADER}[ WARNING ] > Ignoring TARGET information since mode is either [docker-daemon] or [containers-storage].{bcolors.ENDC}')
+    #     target = neutral
+    # return source, target
+
+def prepare_execution(credentials, args):
+    set_manifest_format(args)
+    set_global_parameters(global_params)
+    source, target = define_endpoints(credentials, args)
+    set_namespaces_values(source, target, args)
+    set_transfer_modes(args)
+    return source, target
+
+def process_options(source, target, args):
+    skopeolib.skopeo_version()
+    if getattr(args, 'image') is not None:
+        skopeo_single_transfer(source, target, args.src_mode, args.dst_mode, args.image)
+    elif getattr(args, 'file') is not None:
+        skopeo_multiple_transfer(args.file.readlines(), args.src_mode, args.dst_mode, source, target)
+    elif getattr(args, 'update') is not None:
+        if getattr(args, 'release') is not None:
+            update_releases(source, target, args.update, args.release)
         else:
-            print(f'{bcolors.HEADER}[ DEBUG - IMG ] > PRIVATE --> LOCAL {bcolors.ENDC}')
-            target = local
-        update_endpoint_namespace(source, args, 'src_ns')
-        update_endpoint_namespace(target, args, 'dst_ns')
-        return source, target
-
-def file_transfer_process(args, credentials, source, target):
-    skopeo_multiple_transfer(args.file.readlines(), args.src_mode, args.dst_mode, source, target)
-
-def img_transfer_process(args, credentials, source, target):
-    skopeo_single_transfer(source, target, args.src_mode, args.dst_mode, args.image)
-
-def file_update_process(args, credentials, source, target):
-    if getattr(args, 'release') is not None:
-        update_releases(args, source, target, args.update, args.release)
+            update_releases(source, target, args.update)
     else:
-        update_releases(args, source, target, args.update)
+        print(f'{bcolors.FAIL}[ ERROR ] > Action UPDATE is not supported for local docker daemon transfer.{bcolors.ENDC}')
+        sys.exit(1)
+
 
 ############################################################################
 ################################### Main ###################################
@@ -334,16 +385,15 @@ def main():
     print(f'{bcolors.INFO}[ INFO ] > Loading {args.creds} file.{bcolors.ENDC}')
     credentials = load_json(args.creds)
 
+    # if getattr(args, 'creds'):
+    #     credentials = load_json(args.creds)
+    # else:
+    #     credentials = load_json('credentials.json')
     credentials['public'] = public
     credentials['local'] = local
 
-    set_manifest_format(args)
-    set_global_parameters(global_params)
-    source, target = define_endpoints(credentials, args)
-    set_transfer_modes(args)
-
-    skopeolib.skopeo_version()
-    args.func(args, credentials, source, target)
+    source, target = prepare_execution(credentials, args)
+    process_options(source, target, args)
 
     end = timer()
     print(f'{bcolors.OKGREEN}[ SKOPEO ] > Program finished. Transfer executed successfully.{bcolors.ENDC}')

@@ -47,6 +47,14 @@ def convert_bytes_to_string(bytes):
     string = ''.join(map(chr, bytes))
     return string
 
+def fetch_credentials(sa, token):
+    if not sa or not token:
+        print(f'{bcolors.HEADER}[ WARNING ] > Using empty credentials.{bcolors.ENDC}')
+        credentials = 'null'
+    else:
+        credentials = f"{sa}:{token}"
+    return credentials
+
 def run_cmd(cmd, error_string=None):
     try:
         subprocess.run([cmd], shell=True, check=True, stderr=subprocess.PIPE)
@@ -84,82 +92,60 @@ def skopeo_login(creds):
     error_str = f'{bcolors.FAIL}[ ERROR ] >> Skopeo FAILED to login {creds.get("name")}.{bcolors.ENDC}'
     run_cmd(cmd, error_str)
 
-def pull_from_public_registry(src_img, dst_img):
-    cmd = f'skopeo copy --insecure-policy --format {manifest_version} docker://{src_img} dir:/tmp/{dst_img} --src-tls-verify=false'
+def skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target):
+    src_cred = fetch_credentials(source.get("sa"), source.get("token"))
+    dst_cred = fetch_credentials(target.get("sa"), target.get("token"))
+    cmd = f'skopeo copy --insecure-policy \
+                        --format {manifest_version} \
+                        --src-tls-verify=false \
+                        --src-creds={src_cred} \
+                        --dest-tls-verify=false \
+                        --dest-creds={dst_cred} \
+                        {src_mode}{src_img} \
+                        {dst_mode}{dst_img}'
+    print(cmd)
     error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to download image {src_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ STEP 1 : PULL ] >> transfer from remote {src_img}  to local /tmp/{dst_img}{bcolors.ENDC}')
+    print(f'{bcolors.INFO}[ SKOPEO COPY ] >> transfer from {src_mode}{src_img} to {dst_mode}{dst_img}{bcolors.ENDC}')
     run_cmd(cmd, error_str)
 
-def push_to_public_registry(src_img, dst_img):
-    cmd = f'skopeo copy --insecure-policy --format {manifest_version} dir:/{src_img} docker://{dst_img} --dest-tls-verify=false'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to download image {src_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ STEP 2 : PUSH ] >> transfer from local /tmp/{src_img} to {dst_img}{bcolors.ENDC}')
-    run_cmd(cmd, error_str)
-
-def pull_from_private_registry(src_img, dst_img, source):
-    cmd = f'skopeo copy --insecure-policy --format {manifest_version} docker://{src_img} dir:/tmp/{dst_img} --src-tls-verify=false --src-creds {source.get("sa")}:{source.get("token")}'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to download image {src_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ STEP 1 : PULL ] >> transfer from remote {src_img}  to local /tmp/{dst_img}{bcolors.ENDC}')
-    run_cmd(cmd, error_str)
-
-def push_to_private_registry(src_img, dst_img, target):
-    cmd = f'skopeo copy --insecure-policy --format {manifest_version} dir:/tmp/{src_img} docker://{dst_img} --dest-tls-verify=false --dest-creds {target.get("sa")}:{target.get("token")}'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to upload image {dst_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ STEP 2 : PUSH ] >> transfer from local /tmp/{src_img} to {dst_img}{bcolors.ENDC}')
-    run_cmd(cmd, error_str)
-
-def push_to_private_registry_from_daemon(src_img, dst_img, target):
-    cmd = f'skopeo copy --insecure-policy --format {manifest_version} docker-daemon:{src_img} docker://{dst_img} --dest-tls-verify=false --dest-creds {target.get("sa")}:{target.get("token")}'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to upload image {dst_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ UNIQUE STEP : PUSH FROM DAEMON ] >> transfer from local docker daemon : {src_img} to {dst_img}{bcolors.ENDC}')
-    run_cmd(cmd, error_str)
-
-def multi_pull_from_public_registry(data):
-    for line, value in enumerate(data):
-        value = re.sub(invisible_char, '', value)
-        img_split = value.split('/')
-        img_only = f'{img_split[-1]}'
-        src_img = f'{value}'
-        pull_from_public_registry(src_img, img_only)
-
-def multi_pull_from_private_registry(data, source):
-    skopeo_login(source)
-    for line, value in enumerate(data):
-        value = re.sub(invisible_char, '', value)
-        src_img = f'{source.get("registry")}/{source.get("ns")}/{value}'
-        dst_img = f'{value}'
-        pull_from_private_registry(src_img, dst_img, source)
-
-def multi_push_to_private_registry(data, target, daemon=False):
-    skopeo_login(target)
-    for line, value in enumerate(data):
-        value = re.sub(invisible_char, '', value)
-        if not value:
-            break
-        # img_split = value.split('/')
-        # img_only = img_split[-1]
-        src_img = f'{value}'
-        dst_img = f'{target.get("registry")}/{target.get("ns")}/{value}'
-        if daemon is False:
-            push_to_private_registry(src_img, dst_img, target)
-        else:
-            push_to_private_registry_from_daemon(src_img, dst_img, target)
+def skopeo_multiple_copy(data, src_mode, dst_mode, source, target):
+    if source.get('name') == 'docker-hub':
+        print(f'{bcolors.INFO}[ INFO ] >> Multiple transfer from PUBLIC registry{bcolors.ENDC}')
+        for line, value in enumerate(data):
+            value = re.sub(invisible_char, '', value)
+            img_split = value.split('/')
+            img_only = f'{img_split[-1]}'
+            src_img = f'{value}'
+            dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
+            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target)
+    else:
+        print(f'{bcolors.INFO}[ INFO ] >> Multiple transfer from PRIVATE registry{bcolors.ENDC}')
+        for line, value in enumerate(data):
+            value = re.sub(invisible_char, '', value)
+            img_split = value.split('/')
+            img_only = f'{img_split[-1]}'
+            src_img = f'{source.get("registry")}/{source.get("ns")}/{img_only}'
+            dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
+            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target)
 
 def skopeo_list_img_tags(img, source=None, release=None):
     if source is None:
         if release is not None:
             print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all image version of release {release} on repository {img} {bcolors.ENDC}')
-            cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | grep -e '^\\s*\"{release}'"
+            #cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | grep -e '^\\s*\"{release}'"
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | jq '.[]' | jq 'select(test(\"{release}\"))'"
         else:
             print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images on repository {img} {bcolors.ENDC}')
-            cmd = f'skopeo list-tags --tls-verify=false docker://{img} | jq ''.Tags'''
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | jq '.[]'"
     else:
         if release is not None:
             print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images version of release {release} on repository {img} {bcolors.ENDC}')
-            cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | grep '^\\s*\"{release}'"
+            #cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | grep '^\\s*\"{release}'"
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | jq '.[]' | jq 'select(test(\"{release}\"))'"
         else:
             print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images on repository {img} {bcolors.ENDC}')
-            cmd = f'skopeo list-tags --tls-verify=false docker://{img} --creds {source.get("sa")}:{source.get("token")} | jq ''.Tags'''
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | jq '.[]'"
     error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to catch {img} tags.'
+    print(cmd)
     result = popen_cmd(cmd, error_str)
     return result

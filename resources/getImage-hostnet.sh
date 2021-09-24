@@ -40,7 +40,7 @@
 # v5.0.0
 
 # SKOPEO VERSION IMAGE EXECUTED
-SKOPEO_IMG=skopeo-transfer:latest
+SKOPEO_IMG=ixxel/skopeo-transfer:latest
 
 # PROGRAM PARAMETERS
 SRC=$1
