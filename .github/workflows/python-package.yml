@@ -102,75 +102,62 @@ jobs:
         APP_VERSION=$(python3 ${WORKING_DIR}/skopeoTransfer.py --version | grep -Eo "[0-9]+.{1,4}")
         echo ::set-output name=APP_VERSION::${APP_VERSION}
         echo -e "${CYAN}[ INFO ] > Script version is ${APP_VERSION}.${BLANK}"
-    - name: Build image with buildah
+    - name: Build docker image with buildah
       id: build-image
       env:
         APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
-      run: |
-        echo -e "${BLUE}[ STEP - BUILDING IMAGE ] > Building docker image with buildah.${BLANK}"
-        echo -e "${CYAN}[ INFO ] > Buildah version.${BLANK}"
-        buildah --version
-        echo -e "${CYAN}[ INFO ] > Podman version.${BLANK}"
-        podman --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing build ${APP_VERSION}.${BLANK}"
-        buildah bud -t ${PROGRAM_NAME}:${APP_VERSION} ${WORKING_DIR}
-        echo -e "${CYAN}[ INFO ] > Displaying podman built images.${BLANK}"
-        podman images
-        echo -e "${YELLOW}[ EXECUTING ] > Checking docker image execution.${BLANK}"
-        podman run --rm ${PROGRAM_NAME}:${APP_VERSION} --version
-        if [[ $? = 0 ]]
-        then
-          echo -e "${GREEN}[ CHECK SUCCESS ] > Docker image working properly.${BLANK}"
-        else
-          echo -e "${RED}[ CHECK FAILED ] > Something wrong with docker image.${BLANK}"
-          exit 1
-        fi
-    - name: Transfer image with Skopeo
-      id: transfer-image
+      uses: ixxeL-actions/buildah-bud@main
+      with:
+        tag: '${PROGRAM_NAME}:${APP_VERSION}'
+        file: '""'
+        format: 'oci'
+        build-arg: ''
+        working-dir: '${WORKING_DIR}'
+    - name: Archive docker image for CVE scan
+      id: archive-image
       env:
         APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
-      run: |
-        echo -e "${BLUE}[ STEP - TRANSFERING IMAGE ] > Transfering docker image with skopeo.${BLANK}"
-        echo -e "${CYAN}[ INFO ] > Skopeo version.${BLANK}"
-        skopeo --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION} transfer.${BLANK}"
-        skopeo login docker.io -u ixxel -p ${{ secrets.DOCKER_IO_PWD }}
-        skopeo copy --insecure-policy \
-                    --format v2s2 \
-                    --dest-tls-verify=false \
-                    containers-storage:localhost/${PROGRAM_NAME}:${APP_VERSION} \
-                    docker://${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}
-
-        echo -e "${YELLOW}[ EXECUTING ] > Executing ${REPOSITORY}/${PROGRAM_NAME}:latest transfer.${BLANK}"
-        skopeo copy --insecure-policy \
-                    --format v2s2 \
-                    --dest-tls-verify=false \
-                    containers-storage:localhost/${PROGRAM_NAME}:${APP_VERSION} \
-                    docker://${REPOSITORY}/${PROGRAM_NAME}:latest
-
-        echo -e "${CYAN}[ INFO ] > Verifying upload of image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
-        skopeo_output=$(skopeo list-tags docker://${REPOSITORY}/${PROGRAM_NAME} --tls-verify=false)
-        echo "$skopeo_output" | jq
-
-        if [[ $(echo ${skopeo_output} | grep -i -E "${APP_VERSION}") ]]
-        then
-          echo -e "${GREEN}[ CHECK SUCCESS ] > Docker image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION} found in repository.${BLANK}"
-        else
-          echo -e "${RED}[ STEP FAILED ] > Something went wrong when uploading the docker image ${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}.${BLANK}"
-          exit 1
-        fi
-
-  # deliver:
-  #   needs: [test, build]
-  #   runs-on: ubuntu-latest
-  #   container: 
-  #     image: ixxel/multi-tools-alpine:v1.0
-  #   defaults:
-  #     run:
-  #       shell: bash
-  #   steps:
-  #     - name: test-script
-  #       run: |
-  #         echo -e "${YELLOW}[ TEST SCRIPT STEP ] > Moving to directory and changing branch...${BLANK}"
-  #       shell: bash {0}
+      uses: ixxeL-actions/buildah-push@main
+      with:
+        image-id: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
+        transport: 'oci-archive'
+        destination: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
+        format: '""'
+    - name: Security scan for docker image
+      id: scan-image
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/grype-scan@main
+      with:
+        image-ref: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
+        transport: 'oci-archive'
+        fail-on: '""'
+        output: 'table'
+        scope: 'AllLayers'
+        template: '""'
+        verbose: ''
+    - name: Transfer image with Skopeo
+      id: transfer-image-version
+      env:
+        APP_VERSION: ${{ steps.build-version.outputs.IMAGE_VERSION }}
+      uses: ixxeL-actions/skopeo-copy@main
+      with:
+        src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
+        dst-img: '${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}'
+        format: 'v2s2'
+        src-transport: 'containers-storage'
+        dst-transport: 'docker'
+        dst-creds: 'ixxel:${{ secrets.DOCKER_IO_PWD }}'
+    - name: Transfer image with Skopeo (latest)
+      id: transfer-image-latest
+      env:
+        APP_VERSION: ${{ steps.build-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/skopeo-copy@main
+      with:
+        src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
+        dst-img: '${REPOSITORY}/${PROGRAM_NAME}:latest'
+        format: 'v2s2'
+        src-transport: 'containers-storage'
+        dst-transport: 'docker'
+        dst-creds: 'ixxel:${{ secrets.DOCKER_IO_PWD }}'
 
