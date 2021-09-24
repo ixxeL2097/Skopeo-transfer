@@ -77,7 +77,7 @@ def parse():
     sub_file = subparsers.add_parser('file', help='Multiple transfer mode from file')
     sub_update = subparsers.add_parser('update', help='Update transfer mode')
     # GENERAL arguments
-    parser.add_argument('--format', type=str, default='v2s2', choices=['v2s2','v2s1','oci'], help='Manifest type (oci, v2s1, or v2s2) to use in the destination (default is manifest type of source, with fallbacks)')
+    parser.add_argument('--format', type=str, default='v2s2', choices=['v2s2', 'v2s1', 'oci'], help='Manifest type (oci, v2s1, or v2s2) to use in the destination (default is manifest type of source, with fallbacks)')
     parser.add_argument('--creds', type=str, default='credentials.json', help='Path of the json file for registries credentials')
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
     # IMG arguments
@@ -88,8 +88,8 @@ def parse():
     sub_img.add_argument('--dst', type=str, help='destination name')
     sub_img.add_argument('--src-ns', type=str, help='namespace for source')
     sub_img.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_img.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_img.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
+    sub_img.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_img.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
     # FILE arguments
     sub_file.set_defaults(func=file_transfer_process)
     sub_file.add_argument('file', type=argparse.FileType('r'), help='List of docker images to transfer. Must be a file.')
@@ -98,8 +98,8 @@ def parse():
     sub_file.add_argument('--dst', type=str, help='destination name')
     sub_file.add_argument('--src-ns', type=str, help='namespace for source')
     sub_file.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_file.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_file.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
+    sub_file.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_file.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
     # UPDATE arguments
     sub_update.set_defaults(func=file_update_process)
     sub_update.add_argument('update', nargs="+", type=str, help='Update latest img releases from one registry to another')
@@ -108,8 +108,8 @@ def parse():
     sub_update.add_argument('--dst', type=str, help='destination name')
     sub_update.add_argument('--src-ns', type=str, help='namespace for source')
     sub_update.add_argument('--dst-ns', type=str, help='namespace for destination')
-    sub_update.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for source')
-    sub_update.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage','docker','docker-daemon','dir'], help='transport type for destination')
+    sub_update.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_update.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
     sub_update.add_argument('--release', type=str, help='Release of the images to update. Exemple : 3.2 will download all 3.2.x')
 
     args = parser.parse_args()
