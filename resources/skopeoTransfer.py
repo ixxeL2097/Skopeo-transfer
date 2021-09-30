@@ -6,8 +6,8 @@
 __author__ = "Frederic Spiers"
 __credits__ = ["Frederic Spiers", "-", "-"]
 __license__ = "----"
-__version__ = "5.0.0"
-__date__ = "08/07/2021"
+__version__ = "6.0.0"
+__date__ = "30/09/2021"
 __maintainers__ = ["Frederic Spiers"]
 __email1__ = "fredspiers@gmail.com"
 __status__ = "Released"
@@ -22,10 +22,15 @@ import argparse
 import re
 import copy
 from packaging import version
-import skopeolib
 from timeit import default_timer as timer
 from datetime import timedelta
-import json
+import skopeolib
+import toolbox
+from colorama import init, Fore, Back, Style
+
+# Fore: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
+# Back: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
+# Style: DIM, NORMAL, BRIGHT, RESET_A
 
 ############################################################################
 ################################# Variables ################################
@@ -37,11 +42,10 @@ public = {
     "registry": "",
     "ns": ""
 }
-# Local docker daemon registry
-daemon = {
-    "name": "docker-daemon",
-    "registry": "",
-    "ns": ""
+local = {
+    "name": "local",
+    "registry": "localhost",
+    "ns": "default"
 }
 
 # PARAMS
@@ -60,102 +64,93 @@ latest_img = re.compile('^(latest)$')
 ################################# Functions ################################
 ############################################################################
 
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    INFO = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    LOGIN = '\033[96m'
-    CYAN = '\033[36m'
-
 def parse():
-    parser = argparse.ArgumentParser(description='Transfer docker image(s) from one repository to another with skopeo')
-    exlusive = parser.add_mutually_exclusive_group(required=True)
-    exlusive.add_argument('--image', type=str, help='Name of the docker image to transfer')
-    exlusive.add_argument('--file', type=argparse.FileType('r'), help='List of docker images to transfer. Must be a file.')
-    exlusive.add_argument('--update', nargs="*", type=str, help='Update latest img releases from one registry to another')
-    parser.add_argument('--release', type=str, help='Release of the images to update. Exemple : 3.2 will download all 3.2.x')
-    parser.add_argument('--public', default=False, action='store_true', help='download from a public registry')
-    parser.add_argument('--daemon', default=False, action='store_true', help='use local docker daemon registry')
-    parser.add_argument('--creds', type=str, help='Path of the json file for registries credentials')
+    parser = argparse.ArgumentParser(prog='skopeoTransfer', description='Transfer docker image(s) from one repository to another with skopeo')
+    subparsers = parser.add_subparsers(help='sub-command help', dest='command')
+    sub_img = subparsers.add_parser('img', help='Single named image transfer mode')
+    sub_file = subparsers.add_parser('file', help='Multiple transfer mode from file')
+    sub_update = subparsers.add_parser('update', help='Update transfer mode')
+    # GENERAL arguments
+    parser.add_argument('--format', type=str, default='v2s2', choices=['v2s2', 'v2s1', 'oci'], help='Manifest type (oci, v2s1, or v2s2) to use in the destination (default is manifest type of source, with fallbacks)')
+    parser.add_argument('--creds', type=str, default='credentials.json', help='Path of the json file for registries credentials')
+    parser.add_argument('--safe', default=False, action='store_true', help='Using safe mode will download and upload image instead of direct transfer')
+    parser.add_argument('--debug', default=False, action='store_true', help='Print out information to debug commands')
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
+    # IMG arguments
+    sub_img.set_defaults(func=img_transfer_process)
+    sub_img.add_argument('image', type=str, help='Name of the docker image to transfer')
+    sub_img.add_argument('--public', default=False, action='store_true', help='download from a public registry')
+    sub_img.add_argument('--src', type=str, help='source name')
+    sub_img.add_argument('--dst', type=str, help='destination name')
+    sub_img.add_argument('--src-ns', type=str, help='namespace for source')
+    sub_img.add_argument('--dst-ns', type=str, help='namespace for destination')
+    sub_img.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_img.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
+    # FILE arguments
+    sub_file.set_defaults(func=file_transfer_process)
+    sub_file.add_argument('file', type=argparse.FileType('r'), help='List of docker images to transfer. Must be a file.')
+    sub_file.add_argument('--public', default=False, action='store_true', help='download from a public registry')
+    sub_file.add_argument('--src', type=str, help='source name')
+    sub_file.add_argument('--dst', type=str, help='destination name')
+    sub_file.add_argument('--src-ns', type=str, help='namespace for source')
+    sub_file.add_argument('--dst-ns', type=str, help='namespace for destination')
+    sub_file.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_file.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
+    # UPDATE arguments
+    sub_update.set_defaults(func=file_update_process)
+    sub_update.add_argument('update', nargs="+", type=str, help='Update latest img releases from one registry to another')
+    sub_update.add_argument('--public', default=False, action='store_true', help='download from a public registry')
+    sub_update.add_argument('--src', type=str, help='source name')
+    sub_update.add_argument('--dst', type=str, help='destination name')
+    sub_update.add_argument('--src-ns', type=str, help='namespace for source')
+    sub_update.add_argument('--dst-ns', type=str, help='namespace for destination')
+    sub_update.add_argument('--src-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for source')
+    sub_update.add_argument('--dst-mode', type=str, default='docker', choices=['containers-storage', 'docker', 'docker-daemon', 'dir'], help='transport type for destination')
+    sub_update.add_argument('--release', type=str, help='Release of the images to update. Exemple : 3.2 will download all 3.2.x')
+
     args = parser.parse_args()
     return args
-
-def load_json(json_file_path):
-    json_file = open(json_file_path, 'r')
-    python_dict = json.load(json_file)
-    return python_dict
-
-def convert_bytes_to_string(bytes):
-    string = ''.join(map(chr, bytes))
-    return string
-
-def convert_bytes_list_to_clean_str_list(bytes_list):
-    clean_str_list = []
-    for bytes_elem in bytes_list:
-        str_elem = convert_bytes_to_string(bytes_elem)
-        purged_tag = re.sub('[\\s\",\\n]', '', str_elem)
-        clean_str_list.append(purged_tag)
-    return clean_str_list
-
-def check_regex(string, pattern):
-    if pattern.search(string):
-        return True
-    else:
-        return False
-
-def check_env_vars(mandatory_env_vars):
-    for var in mandatory_env_vars:
-        if var not in os.environ:
-            raise EnvironmentError(f'{bcolors.FAIL}[ ERROR ] >> Environment variable {var} not defined. Please set {var}.{bcolors.ENDC}')
-    print(f'{bcolors.OKGREEN}[ CHECK SUCCESS ] >> all ENV vars provided. Processing transfer now...{bcolors.ENDC}')
 
 def set_global_parameters(global_params):
     for param in global_params:
         if not os.environ.get(param):
-            print(f'{bcolors.CYAN}[ SKOPEO PARAMETERS ] > Global parameter {param} not defined, using default : {globals()[param]}.{bcolors.ENDC}')
+            print(f'{Fore.CYAN}{Style.BRIGHT}[ SKOPEO PARAMETERS ] > Global parameter {param} not defined, using default : {Fore.RED}{globals()[param]}.')
         else:
             globals()[param] = os.environ.get(param)
-            print(f'{bcolors.CYAN}[ SKOPEO PARAMETERS ] > Specific parameter for {param} provided and set : {globals()[param]}.{bcolors.ENDC}')
+            print(f'{Fore.CYAN}{Style.BRIGHT}[ SKOPEO PARAMETERS ] > Specific parameter for {param} provided and set : {Fore.RED}{globals()[param]}.')
 
-def set_manifest_format():
-    if not os.environ.get('MANIFEST_FORMAT'):
-        print(f'{bcolors.CYAN}[ SKOPEO PARAMETERS ] > No custom manifest format version provided, using default : {skopeolib.manifest_version}.{bcolors.ENDC}')
+def set_manifest_format(args):
+    if not os.environ.get('FORMAT'):
+        print(f"{Fore.CYAN}{Style.BRIGHT}[ SKOPEO PARAMETERS ] > No custom manifest format version provided, using default : {Fore.RED}{getattr(args, 'format')}.")
     else:
-        skopeolib.manifest_version = os.environ.get('MANIFEST_FORMAT')
-        print(f'{bcolors.CYAN}[ SKOPEO PARAMETERS ] > Specific manifest format version provided and set : {skopeolib.manifest_version}.{bcolors.ENDC}')
+        setattr(args, 'format', os.environ.get('FORMAT'))
+        print(f"{Fore.CYAN}{Style.BRIGHT}[ SKOPEO PARAMETERS ] > Specific manifest format version provided and set : {Fore.RED}{getattr(args, 'format')}.")
+    skopeolib.manifest_version = getattr(args, 'format')
 
-def set_namespaces_values(source, target):
-    source.update({'ns': re.sub(invisible_char, '', str(os.environ.get('SRC_NAMESPACE')))})
-    target.update({'ns': re.sub(invisible_char, '', str(os.environ.get('DST_NAMESPACE')))})
+def set_transport_mode_format(transport_mode):
+    if transport_mode == 'docker':
+        transport_mode = f"{transport_mode}://"
+    elif transport_mode == 'dir':
+        transport_mode = f"{transport_mode}:/"
+    else:
+        transport_mode = f"{transport_mode}:"
+    return transport_mode
 
-def setEnv(credentials):
-    try:
-        source = credentials.get(os.environ.get('SOURCE'))
-        target = credentials.get(os.environ.get('TARGET'))
-        # source = copy.deepcopy(globals()[os.environ.get('SOURCE')])
-        # target = copy.deepcopy(globals()[os.environ.get('TARGET')])
-        return source, target
-    except Exception as e:
-        print(f'{bcolors.FAIL}[ ERROR ] >> {str(e)} is not a valid SOURCE/TARGET environment variable. Please pick an available one or add your own in py script.{bcolors.ENDC}')
-        sys.exit(1)
+def set_transfer_modes(args):
+    setattr(args, 'src_mode', set_transport_mode_format(args.src_mode))
+    setattr(args, 'dst_mode', set_transport_mode_format(args.dst_mode))
 
 def comply_tag(tag):
-    if check_regex(tag, globals()[TAG_POLICY]):
-        print(f'{bcolors.OKGREEN}[ VERSION COMPLY ] >> Version {tag} is valid.{bcolors.ENDC}')
+    if toolbox.check_regex(tag, globals()[TAG_POLICY]):
+        print(f'{Fore.GREEN}{Style.BRIGHT}[ VERSION COMPLY ] >>{Style.NORMAL} Version {Style.BRIGHT}{tag}{Style.NORMAL} is valid.')
         return tag
     else:
-        print(f'{bcolors.FAIL}[ VERSION ERROR ] >> Version : {tag} is not valid.{bcolors.ENDC}')
+        print(f'{Fore.RED}{Style.BRIGHT}[ VERSION ERROR ] >>{Style.NORMAL} Version : {tag} is not valid.')
         return None
 
 def check_latest_tag(tags_list):
     for tag in tags_list:
-        if check_regex(tag, latest_img):
+        if toolbox.check_regex(tag, latest_img):
             return True
         else:
             pass
@@ -164,7 +159,7 @@ def sort_version(version_nb):
     try:
         return version.Version(version_nb)
     except version.InvalidVersion as e:
-        print(f'{bcolors.FAIL}[ SORT ERROR ] >> Skopeo FAILED to parse version : {version_nb} (not in PEP-440 scheme). {e}.{bcolors.ENDC}')
+        print(f'{Fore.RED}{Style.BRIGHT}[ SORT ERROR ] >> Skopeo FAILED to parse version : {version_nb} (not in PEP-440 scheme). {e}.')
         sys.exit(1)
 
 def get_tags(img, source, release=None):
@@ -176,10 +171,13 @@ def get_tags(img, source, release=None):
         tags_list = skopeolib.skopeo_list_img_tags(src_img, source, release)
 
     if len(tags_list) >= 1:
-        str_tags_list = convert_bytes_list_to_clean_str_list(tags_list)
-        cleaned_tags = map(lambda x: comply_tag(str_tags_list[x]), range(1, len(str_tags_list) - 1, 1))
+        str_tags_list = toolbox.convert_bytes_list_to_clean_str_list(tags_list)
+        cleaned_tags = map(lambda x: comply_tag(str_tags_list[x]), range(0, len(str_tags_list), 1))
         purged_tags = filter(None, cleaned_tags)
         final_tags_list = list(purged_tags)
+        if len(final_tags_list) == 0:
+            print(f'{Fore.RED}{Style.BRIGHT}[ ABORTING ] >> no available tags for image {img} ({release})')
+            sys.exit(1)
         if len(final_tags_list) == 1:
             tag = final_tags_list[0]
             return tag
@@ -187,7 +185,7 @@ def get_tags(img, source, release=None):
             tags = final_tags_list
             return tags
     elif len(tags_list) == 0:
-        print(f'{bcolors.FAIL}[ ABORTING ] >> There are no image version for {img} ({release}){bcolors.ENDC}')
+        print(f'{Fore.RED}{Style.BRIGHT}[ ABORTING ] >> There are no image version for {img} ({release})')
         sys.exit(1)
 
 def get_latest_release(img, source, release=None):
@@ -199,96 +197,98 @@ def get_latest_release(img, source, release=None):
             sorted_version.append('latest')
         else:
             sorted_version = sorted(cleaned_tags, key=lambda x: sort_version(x))
-        print(f'{bcolors.HEADER}[ LISTING ] >> Multiple versions available for {img} --> {sorted_version}')
-        print(f'{bcolors.HEADER}[ SORTING ] >> {img} latest tag is {img}:{sorted_version[-1]}{bcolors.ENDC}')
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[ LISTING ] >>{Style.NORMAL} Multiple versions available for {Style.BRIGHT}{img}{Style.NORMAL} --> {Style.BRIGHT}{sorted_version}')
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[ SORTING ] >> {img} {Style.NORMAL}latest tag is {Style.BRIGHT}{img}:{sorted_version[-1]}')
         return f'{img}:{sorted_version[-1]}'
     elif type(cleaned_tags) is str:
-        print(f'{bcolors.HEADER}[ LISTING ] >> Only one version available for {img}')
-        print(f'{bcolors.HEADER}[ SORTING ] >> {img} latest tag is {img}:{cleaned_tags}{bcolors.ENDC}')
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[ LISTING ] >>{Style.NORMAL} Only one version available for {Style.BRIGHT}{img}')
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[ SORTING ] >> {img} {Style.NORMAL} latest tag is {Style.BRIGHT}{img}:{cleaned_tags}')
         return f'{img}:{cleaned_tags}'
 
-def update_releases(source, target, docker_images, release=None):
+def update_releases(args, source, target, docker_images, release=None, safe=False):
     releases_map = map(lambda x: get_latest_release(x, source, release), docker_images)
     latest_releases = list(releases_map)
-    print(f'{bcolors.OKBLUE}[ SKOPEO ] > LATEST RELEASES TO TRANSFER ARE {latest_releases}{bcolors.ENDC}')
-    skopeo_multiple_transfer(source, target, latest_releases)
+    print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] > {Style.NORMAL}LATEST RELEASES TO TRANSFER ARE {Fore.GREEN}{Style.BRIGHT}{latest_releases}')
+    skopeo_multiple_transfer(latest_releases, args.src_mode, args.dst_mode, source, target, safe)
 
-def skopeo_single_transfer(source, target, image):
-    img_split = image.split('/')
-    img_only = f'{img_split[-1]}'
+def skopeo_single_transfer(source, target, src_mode, dst_mode, image, safe=False):
+    img_only = f"{image.split('/')[-1]}"
     if source.get("name") == "docker-hub":
         src_img = f'{image}'
         dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING SINGLE IMAGE FROM [[ {src_img} ]] to [[ {dst_img} ]]{bcolors.ENDC}')
-        skopeolib.pull_from_public_registry(src_img, img_only)
-        skopeolib.skopeo_login(target)
-        skopeolib.push_to_private_registry(img_only, dst_img, target)
-    elif source.get("name") == "docker-daemon":
-        src_img = f'{image}'
-        dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING SINGLE IMAGE FROM LOCAL DOCKER DAEMON [[ {src_img} ]] to [[ {dst_img} ]]{bcolors.ENDC}')
-        skopeolib.skopeo_login(target)
-        skopeolib.push_to_private_registry_from_daemon(src_img, dst_img, target)
+        print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] > {Style.NORMAL}COPYING SINGLE IMAGE FROM [[ {Style.BRIGHT}{src_img}{Style.NORMAL} ]] to [[ {Style.BRIGHT}{dst_img}{Style.NORMAL} ]]')
+        skopeolib.skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target, safe)
     else:
         src_img = f'{source.get("registry")}/{source.get("ns")}/{image}'
         dst_img = f'{target.get("registry")}/{target.get("ns")}/{image}'
         img_only = f'{image}'
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING SINGLE IMAGE FROM [[ {src_img} ]] to [[ {dst_img} ]]{bcolors.ENDC}')
-        skopeolib.skopeo_login(source)
-        skopeolib.pull_from_private_registry(src_img, img_only, source)
-        skopeolib.skopeo_login(target)
-        skopeolib.push_to_private_registry(img_only, dst_img, target)
+        print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >{Style.NORMAL} COPYING SINGLE IMAGE FROM [[ {Style.BRIGHT}{src_img}{Style.NORMAL} ]] to [[ {Style.BRIGHT}{dst_img}{Style.NORMAL} ]]')
+        skopeolib.skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target, safe)
 
-def skopeo_multiple_transfer(source, target, data):
+def skopeo_multiple_transfer(data, src_mode, dst_mode, source, target, safe=False):
     if source.get("name") == "docker-hub":
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING MULTIPLE IMAGES FROM [[ Docker Hub ]] to [[ {target.get("registry")}/{target.get("ns")} ]]{bcolors.ENDC}')
-        skopeolib.multi_pull_from_public_registry(data)
-        for key, value in enumerate(data):
-            img_split = value.split('/')
-            data[key] = img_split[-1]
-        skopeolib.multi_push_to_private_registry(data, target)
-    elif source.get("name") == "docker-daemon":
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING MULTIPLE IMAGES FROM [[ Local Docker Daemon ]] to [[ {target.get("registry")}/{target.get("ns")} ]]{bcolors.ENDC}')
-        skopeolib.multi_push_to_private_registry(data, target, True)
+        print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >{Style.NORMAL} COPYING MULTIPLE IMAGES FROM [[ {Style.BRIGHT}Docker Hub{Style.NORMAL} ]] to [[ {Style.BRIGHT}{target.get("registry")}/{target.get("ns")}{Style.NORMAL} ]]')
+        skopeolib.skopeo_multiple_copy(data, src_mode, dst_mode, source, target, safe)
     else:
-        print(f'{bcolors.OKBLUE}[ SKOPEO ] > COPYING MULTIPLE IMAGES FROM [[ {source.get("registry")}/{source.get("ns")} ]] to [[ {target.get("registry")}/{target.get("ns")} ]]{bcolors.ENDC}')
-        skopeolib.multi_pull_from_private_registry(data, source)
-        skopeolib.multi_push_to_private_registry(data, target)
+        print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >{Style.NORMAL}  COPYING MULTIPLE IMAGES FROM [[ {Style.BRIGHT}{source.get("registry")}/{source.get("ns")}{Style.NORMAL} ]] to [[ {Style.BRIGHT}{target.get("registry")}/{target.get("ns")}{Style.NORMAL} ]]')
+        skopeolib.skopeo_multiple_copy(data, src_mode, dst_mode, source, target, safe)
 
-def define_mandatory_vars(args):
+def load_cred_endpoint(credentials, args, endpoint_name):
+    try:
+        endpoint = copy.deepcopy(credentials[getattr(args, endpoint_name)])
+    except KeyError as err:
+        print(f"{Fore.RED}{Style.BRIGHT}[ ERROR ] >> {err} is not a valid {endpoint_name} options. Please check your JSON credentials file.")
+        sys.exit(1)
+    return endpoint
+
+def is_endpoint_transport_remote(args, endpoint_mode_name):
+    if getattr(args, endpoint_mode_name) == 'docker-daemon' or getattr(args, endpoint_mode_name) == 'containers-storage' or getattr(args, endpoint_mode_name) == 'dir':
+        return False
+    else:
+        return True
+
+def update_endpoint_namespace(endpoint, args, value):
+    if getattr(args, value) is not None:
+        endpoint.update({'ns': getattr(args, value)})
+
+def define_endpoints(credentials, args):
     if getattr(args, 'public'):
-        MANDATORY_ENV_VARS = ["TARGET", "DST_NAMESPACE"]
-        os.environ['SOURCE'] = 'public'
-    elif getattr(args, 'daemon'):
-        MANDATORY_ENV_VARS = ["TARGET", "DST_NAMESPACE"]
-        os.environ['SOURCE'] = 'daemon'
+        source = public
+        if is_endpoint_transport_remote(args, 'dst_mode'):
+            target = load_cred_endpoint(credentials, args, 'dst')
+        else:
+            target = local
+        update_endpoint_namespace(target, args, 'dst_ns')
+        return source, target
     else:
-        MANDATORY_ENV_VARS = ["TARGET", "SOURCE", "SRC_NAMESPACE", "DST_NAMESPACE"]
-    return MANDATORY_ENV_VARS
+        source = load_cred_endpoint(credentials, args, 'src')
+        if is_endpoint_transport_remote(args, 'dst_mode'):
+            target = load_cred_endpoint(credentials, args, 'dst')
+        else:
+            target = local
+        update_endpoint_namespace(source, args, 'src_ns')
+        update_endpoint_namespace(target, args, 'dst_ns')
+        return source, target
 
-def prepare_execution(MANDATORY_ENV_VARS, credentials):
-    check_env_vars(MANDATORY_ENV_VARS)
-    set_manifest_format()
+def prepare_transfer(args, credentials):
+    set_manifest_format(args)
     set_global_parameters(global_params)
-    source, target = setEnv(credentials)
-    set_namespaces_values(source, target)
+    source, target = define_endpoints(credentials, args)
+    set_transfer_modes(args)
+    skopeolib.skopeo_version()
     return source, target
 
-def process_options(source, target, args):
-    skopeolib.skopeo_version()
-    if getattr(args, 'image') is not None:
-        skopeo_single_transfer(source, target, args.image)
-    elif getattr(args, 'file') is not None:
-        skopeo_multiple_transfer(source, target, args.file.readlines())
-    elif getattr(args, 'update') is not None and source.get("name") != "docker-daemon":
-        if getattr(args, 'release') is not None:
-            update_releases(source, target, args.update, args.release)
-        else:
-            update_releases(source, target, args.update)
-    else:
-        print(f'{bcolors.FAIL}[ ERROR ] > Action UPDATE is not supported for local docker daemon transfer.{bcolors.ENDC}')
-        sys.exit(1)
+def file_transfer_process(args, credentials, source, target):
+    skopeo_multiple_transfer(args.file.readlines(), args.src_mode, args.dst_mode, source, target, args.safe)
 
+def img_transfer_process(args, credentials, source, target):
+    skopeo_single_transfer(source, target, args.src_mode, args.dst_mode, args.image, args.safe)
+
+def file_update_process(args, credentials, source, target):
+    if getattr(args, 'release') is not None:
+        update_releases(args, source, target, args.update, args.release, args.safe)
+    else:
+        update_releases(args, source, target, args.update, None, args.safe)
 
 ############################################################################
 ################################### Main ###################################
@@ -297,20 +297,24 @@ def process_options(source, target, args):
 def main():
     start = timer()
     args = parse()
+    init(autoreset=True)
 
-    if getattr(args, 'creds'):
-        credentials = load_json(args.creds)
-    else:
-        credentials = load_json('credentials.json')
+    if getattr(args, 'debug'):
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[[ DEBUG MODE ]] >{Fore.GREEN} Activated !')
+        skopeolib.debug = True
+
+    print(f'{Fore.YELLOW}{Style.BRIGHT}[ INFO ] >{Style.NORMAL} Loading {Fore.RED}{Style.BRIGHT}{args.creds}{Fore.YELLOW}{Style.NORMAL} file.')
+    credentials = toolbox.load_json(args.creds)
+
     credentials['public'] = public
+    credentials['local'] = local
 
-    MANDATORY_ENV_VARS = define_mandatory_vars(args)
-    source, target = prepare_execution(MANDATORY_ENV_VARS, credentials)
-    process_options(source, target, args)
+    source, target = prepare_transfer(args, credentials)
+    args.func(args, credentials, source, target)
 
     end = timer()
-    print(f'{bcolors.OKGREEN}[ SKOPEO ] > Program finished. Transfer executed successfully.{bcolors.ENDC}')
-    print(f'{bcolors.OKGREEN}[ SKOPEO ] > Program total duration : {str(timedelta(seconds=end-start))}{bcolors.ENDC}')
+    print(f'{Fore.GREEN}{Style.BRIGHT}[ SKOPEO ] > Program finished. Transfer executed successfully.')
+    print(f'{Fore.GREEN}{Style.BRIGHT}[ SKOPEO ] > Program total duration : {str(timedelta(seconds=end-start))}')
 
 if __name__ == "__main__":
     main()

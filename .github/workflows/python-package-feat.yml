@@ -1,12 +1,12 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: CI
+name: CI-feat
 on:
   push:
-    branches: [ main ]
+    branches: [ feat/v6.0.0 ]
   pull_request:
-    branches: [ main ]
+    branches: [ feat/v6.0.0 ]
 env:
   RED: \033[1;31m
   GREEN: \033[1;32m
@@ -136,28 +136,3 @@ jobs:
         scope: 'AllLayers'
         template: '""'
         verbose: ''
-    - name: Transfer image with Skopeo
-      id: transfer-image-version
-      env:
-        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
-      uses: ixxeL-actions/skopeo-copy@main
-      with:
-        src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
-        dst-img: '${REPOSITORY}/${PROGRAM_NAME}:${APP_VERSION}'
-        format: 'v2s2'
-        src-transport: 'containers-storage'
-        dst-transport: 'docker'
-        dst-creds: 'ixxel:${{ secrets.DOCKER_IO_PWD }}'
-    - name: Transfer image with Skopeo (latest)
-      id: transfer-image-latest
-      env:
-        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
-      uses: ixxeL-actions/skopeo-copy@main
-      with:
-        src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
-        dst-img: '${REPOSITORY}/${PROGRAM_NAME}:latest'
-        format: 'v2s2'
-        src-transport: 'containers-storage'
-        dst-transport: 'docker'
-        dst-creds: 'ixxel:${{ secrets.DOCKER_IO_PWD }}'
-

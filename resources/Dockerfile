@@ -14,9 +14,11 @@ RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositori
     skopeo \
     python3 \
     jq \
-    py3-pip
+    py3-pip \
+    tzdata \
+    && cp /usr/share/zoneinfo/${TZ} /etc/localtime
 
-COPY ./skopeoTransfer.py ./skopeolib.py ./getImage-proxy.sh ./getImage-hostnet.sh /app/
+COPY ./skopeoTransfer.py ./skopeolib.py ./toolbox.py ./getImage-proxy.sh ./getImage-hostnet.sh /app/
 
 WORKDIR /app
 

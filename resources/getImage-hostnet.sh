@@ -10,12 +10,11 @@
 #######################################################################################################################################
 ################################################ USAGE EXAMPLES #######################################################################
 #######################################################################################################################################
-# classic transfer :     ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> my-image:1.0
-# public transfer :      ./getImage-hostnet.sh <target> <dst-ns> bitnami/mysql:5.7 public
-# daemon transfer :      ./getImage-hostnet.sh <target> <dst-ns> skopeo-script-py:4.4.1 daemon
-# file list transfer :   ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> 
-# update latest :        ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> alpine-git,alpine-skopeo,alpine-argocd-cli
-# update specific :      ./getImage-hostnet.sh <source> <src-ns> <target> <dst-ns> alpine-git, 3.2
+# classic transfer :     ./getImage-hostnet.sh img my-image:1.0 <source> <src-ns> <target> <dst-ns>
+# public transfer :      ./getImage-hostnet.sh img my-image:1.0 <source> <src-ns> <target> <dst-ns> public
+# file list transfer :   ./getImage-hostnet.sh file file.txt <source> <src-ns> <target> <dst-ns> 
+# update latest :        ./getImage-hostnet.sh update my-image:1.0,his-image:v1.0 <source> <src-ns> <target> <dst-ns> 
+# update specific :      ./getImage-hostnet.sh update my-image:1.0,his-image:v1.0 <source> <src-ns> <target> <dst-ns> 3.2
 #######################################################################################################################################
 
 ## WARNING ==> You need to have a 'credentials.json' file in your current directory. This file must contain your repositories information as per below :
@@ -37,135 +36,131 @@
 #     }
 # }
 
-# v5.0.0
+# v6.0.0
 
 # SKOPEO VERSION IMAGE EXECUTED
-SKOPEO_IMG=skopeo-transfer:latest
+SKOPEO_IMG=ixxel/skopeo-transfer:6.0.0
 
-# PROGRAM PARAMETERS
-SRC=$1
-SRC_NS=$2
-DST=$3
-DST_NS=$4
-IMAGE=$5
-RELEASE=$6
-PUBLIC=""               # Public transfer option
-SOCKET=""               # Docker daemon socket
-MANIFEST_FORMAT=""      # valid are : v2s2 (default), v2s1 or oci
-TAG_POLICY=""           # Valid are : pep440 (default) or pep440_latest
+# STATIC VARIABLES
+DEBUG=""                    # Print commands executed by script (put 'y' to activate)
+SAFE=""                     # Use safe transfer mode (put 'y' to activate)
+PUBLIC=""                   # Public transfer option
+FORMAT="v2s2"               # valid are : v2s2 (default), v2s1 or oci
+TAG_POLICY=""               # Valid are : pep440 (default) or pep440_latest
+SRC_TRANSPORT="docker"      # transport mode for source
+DST_TRANSPORT="docker"      # transport mode for destination
 
 # FILE TRANSFER PARAMETERS
-HOST_LIST_PATH=/home/fred/Documents
-LIST_FILE=list.images
+HOST_LIST_PATH=$(pwd)
+
+# CREDENTIALS
 CREDS_PATH=$(pwd)
 
-if [[ ${!#} = "public" ]] && [[ $# -gt 2 ]]
+# PROGRAM PARAMETERS
+SUB_CMD=$1
+SUB_PARAM=$2
+
+if [[ $DEBUG = "y" ]]
 then
-    if [[ -n $6  ]]
-    then
-        echo "[ ERROR ] >> Too many arguments for 'Public' transfer mode. Please execute script without SOURCE (SRC) and SOURCE_NAMESPACE (SRC_NS) variables."
-        exit 1
-    else
-        echo "[ INFO ] >> Processing transfer from a PUBLIC registry."
-        MODE="--public"
-        DST=$1
-        DST_NS=$2
-        IMAGE=$3
-        RELEASE=$4
-    fi
-elif [[ ${!#} = "daemon" ]] && [[ $# -gt 2 ]]
+    DEBUG='--debug'
+fi
+if [[ $SAFE = "y" ]]
 then
-    if [[ -n $6  ]]
-    then
-        echo "[ ERROR ] >> Too many arguments for 'Daemon' transfer mode. Please execute script without SOURCE (SRC) and SOURCE_NAMESPACE (SRC_NS) variables."
-        exit 1
-    else
-        echo "[ INFO ] >> Processing transfer from local DOCKER DAEMON registry."
-        MODE="--daemon"
-        SOCKET="-v /var/run/docker.sock:/var/run/docker.sock"
-        DST=$1
-        DST_NS=$2
-        IMAGE=$3
-        RELEASE=$4
-    fi
-elif [[ ${!#} = "public" ]] || [[ ${!#} = "daemon" ]] && [[ $# -lt 3 ]]
-then
-    echo "[ ERROR ] >> Not enough arguments for 'Public' or 'Daemon' transfer mode."
-    exit 1
-elif [[ $# -lt 4 ]]
-then
-    echo "[ ERROR ] >> Not enough arguments for 'Private' transfer mode."
-    exit 1
-else
-    echo "[ INFO ] >> Processing transfer from a PRIVATE registry."
+    SAFE='--safe'
 fi
 
-if [[ -n $IMAGE ]] && [[ $IMAGE != "public" ]] && [[ $IMAGE != "daemon" ]]
+if [[ ${!#} = "public" ]]
 then
-    if [[ ! $IMAGE =~ "," ]]
+    MODE="--public"
+    if [[ $SUB_CMD = "img" ]]
     then
-        echo "transfer standard"
-        docker run --rm -it --name skopeo --network=host \
-                $SOCKET \
-                -e SOURCE=$SRC \
-                -e SRC_NAMESPACE=$SRC_NS \
-                -e DST_NAMESPACE=$DST_NS \
-                -e TARGET=$DST \
-                -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                -e TAG_POLICY=$TAG_POLICY \
-                -v $CREDS_PATH:/app:ro \
-                $SKOPEO_IMG \
-                --image $IMAGE \
-                $MODE
-    elif [[ $IMAGE =~ "," ]]
+        CMD="img"
+        PARAM=$SUB_PARAM 
+        DST=$3
+        DST_NS=$4
+    elif [[ $SUB_CMD = "file" ]]
     then
-        if [[ -n $RELEASE ]] && [[ $RELEASE != "public" ]] && [[ $RELEASE != "daemon" ]]
+        CMD="file"
+        PARAM=$SUB_PARAM
+        DST=$3
+        DST_NS=$4
+    elif [[ $SUB_CMD = "update" ]]
+    then
+        CMD="update"
+        PARAM=${SUB_PARAM//,/ }
+        DST=$3
+        DST_NS=$4
+        RELEASE=""
+        if [[ -n $5 ]] && [[ $5 != "public" ]]
         then
-            IMAGES=${IMAGE//,/ }
-            docker run --rm -it --name skopeo --network=host \
-                    $SOCKET \
-                    -e SOURCE=$SRC \
-                    -e SRC_NAMESPACE=$SRC_NS \
-                    -e DST_NAMESPACE=$DST_NS \
-                    -e TARGET=$DST \
-                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                    -e TAG_POLICY=$TAG_POLICY \
-                    -v $CREDS_PATH:/app:ro \
-                    $SKOPEO_IMG \
-                    --update $IMAGES \
-                    --release $RELEASE \
-                    $MODE
-        else
-            IMAGES=${IMAGE//,/ }
-            docker run --rm -it --name skopeo --network=host \
-                    $SOCKET \
-                    -e SOURCE=$SRC \
-                    -e SRC_NAMESPACE=$SRC_NS \
-                    -e DST_NAMESPACE=$DST_NS \
-                    -e TARGET=$DST \
-                    -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-                    -e TAG_POLICY=$TAG_POLICY \
-                    -v $CREDS_PATH:/app:ro \
-                    $SKOPEO_IMG \
-                    --update $IMAGES \
-                    $MODE
+            RELEASE="--release $5"
         fi
-    fi
-elif [ -f "$HOST_LIST_PATH/$LIST_FILE" ]
-then
+    else
+        echo "ERROR"
+        exit 1
+    fi     
     docker run --rm -it --name skopeo --network=host \
-               $SOCKET \
-               -e SOURCE=$SRC \
-               -e SRC_NAMESPACE=$SRC_NS \
-               -e DST_NAMESPACE=$DST_NS \
-               -e TARGET=$DST \
-               -v $HOST_LIST_PATH:/app/list:ro \
-               -e MANIFEST_FORMAT=$MANIFEST_FORMAT \
-               -e TAG_POLICY=$TAG_POLICY \
-               -v $CREDS_PATH:/app:ro \
-               $SKOPEO_IMG \
-               --file /app/list/$LIST_FILE \
-               $MODE
+                                        -e TAG_POLICY=$TAG_POLICY \
+                                        -v $CREDS_PATH:/app:ro \
+                                        -v $HOST_LIST_PATH:/app:ro \
+                                        $SKOPEO_IMG \
+                                        $DEBUG \
+                                        $SAFE \
+                                        --format $FORMAT \
+                                        $CMD $PARAM \
+                                        --dst $DST \
+                                        --dst-ns $DST_NS \
+                                        --dst-mode $DST_TRANSPORT \
+                                        $RELEASE \
+                                        $MODE
 else
-    echo "[ ERROR ] >> either image parameter $IMAGE is null, or no such file or directory $HOST_LIST_PATH/$LIST_FILE provided"
+    if [[ $SUB_CMD = "img" ]]
+    then
+        CMD="img"
+        PARAM=$SUB_PARAM 
+        SRC=$3
+        SRC_NS=$4
+        DST=$5
+        DST_NS=$6
+    elif [[ $SUB_CMD = "file" ]]
+    then
+        CMD="file"
+        PARAM=$SUB_PARAM 
+        SRC=$3
+        SRC_NS=$4
+        DST=$5
+        DST_NS=$6
+    elif [[ $SUB_CMD = "update" ]]
+    then
+        CMD="update"
+        PARAM=${SUB_PARAM//,/ }
+        SRC=$3
+        SRC_NS=$4
+        DST=$5
+        DST_NS=$6
+        RELEASE=""
+        if [[ -n $7 ]]
+        then
+            RELEASE="--release $7"
+        fi
+    else
+        echo "ERROR"
+        exit 1
+    fi
+    docker run --rm -it --name skopeo --network=host \
+                                        -e TAG_POLICY=$TAG_POLICY \
+                                        -v $CREDS_PATH:/app:ro \
+                                        -v $HOST_LIST_PATH:/app:ro \
+                                        $SKOPEO_IMG \
+                                        $DEBUG \
+                                        $SAFE \
+                                        --format $FORMAT \
+                                        $CMD $PARAM \
+                                        --src $SRC \
+                                        --src-ns $SRC_NS \
+                                        --src-mode $SRC_TRANSPORT \
+                                        --dst $DST \
+                                        --dst-ns $DST_NS \
+                                        --dst-mode $DST_TRANSPORT \
+                                        $RELEASE
 fi
