@@ -139,7 +139,7 @@ jobs:
     - name: Transfer image with Skopeo
       id: transfer-image-version
       env:
-        APP_VERSION: ${{ steps.build-version.outputs.IMAGE_VERSION }}
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
       uses: ixxeL-actions/skopeo-copy@main
       with:
         src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
@@ -151,7 +151,7 @@ jobs:
     - name: Transfer image with Skopeo (latest)
       id: transfer-image-latest
       env:
-        APP_VERSION: ${{ steps.build-version.outputs.APP_VERSION }}
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
       uses: ixxeL-actions/skopeo-copy@main
       with:
         src-img: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
