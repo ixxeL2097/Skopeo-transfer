@@ -17,135 +17,112 @@ __status__ = "Released"
 #     "name": "example",
 #     "api": "api.example.local:5000",
 #     "registry": "example.io",
-#     "user": "admin",
-#     "pwd": "password",
 #     "sa": "default_sa",
 #     "token": "oaUtbGciOiJSUzI1NiIefjoiHGda",
-#     "ns": ""
+#     "ns": "default"
 # }
 
 import re
-import subprocess
 import sys
+import toolbox
+from colorama import init, Fore, Back, Style
 
 invisible_char = '[\\s\\t\\n]+'
 manifest_version = 'v2s2'
-
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    INFO = '\033[93m'
-    WARNING = '\033[43m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    LOGIN = '\033[96m'
-
-def convert_bytes_to_string(bytes):
-    string = ''.join(map(chr, bytes))
-    return string
+debug = False
+init(autoreset=True)
 
 def fetch_credentials(sa, token):
     if not sa or not token:
-        print(f'{bcolors.HEADER}[ WARNING ] > Using empty credentials.{bcolors.ENDC}')
+        print(f'{Fore.MAGENTA}{Style.BRIGHT}[ WARNING ] >{Style.NORMAL} Using empty credentials.')
         credentials = 'null'
     else:
         credentials = f"{sa}:{token}"
     return credentials
 
-def run_cmd(cmd, error_string=None):
-    try:
-        subprocess.run([cmd], shell=True, check=True, stderr=subprocess.PIPE)
-    except subprocess.CalledProcessError as e:
-        if error_string is None:
-            print(f'{bcolors.FAIL}[ ERROR ] >> FAILED to execute cmd {cmd}.{bcolors.ENDC}')
-        else:
-            print(f'{error_string}')
-        print(convert_bytes_to_string(e.stderr))
-        sys.exit(1)
-
-def popen_cmd(cmd, error_string=None):
-    sub = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    result = sub.stdout.readlines()
-    output, errors = sub.communicate()
-    if errors:
-        if error_string is None:
-            print(f'{bcolors.FAIL}[ ERROR ] >> FAILED to execute cmd {cmd}.{bcolors.ENDC}')
-        else:
-            print(f'{error_string}')
-        print(f'{convert_bytes_to_string(errors)}')
-        sys.exit(1)
-    else:
-        return result
-
 def skopeo_version():
-    print(f'{bcolors.LOGIN}[ SKOPEO VERSION ] >> Displaying skopeo version...{bcolors.ENDC}')
+    print(f'{Fore.CYAN}{Style.BRIGHT}[ SKOPEO VERSION ] >> Displaying skopeo version...')
     cmd = 'skopeo --version'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> Skopeo FAILED to display version.{bcolors.ENDC}'
-    run_cmd(cmd, error_str)
+    error_str = f' {Fore.RED}{Style.BRIGHT}[ ERROR ] >> Skopeo FAILED to display version.'
+    toolbox.run_cmd(cmd, error_str)
 
 def skopeo_login(creds):
-    print(f'{bcolors.LOGIN}[ SKOPEO LOGIN ] >> login to {creds.get("name")} registry : https://{creds.get("registry")}...{bcolors.ENDC}')
+    print(f'{Fore.CYAN}{Style.BRIGHT}[ SKOPEO LOGIN ] >> login to {creds.get("name")} registry : https://{creds.get("registry")}...')
     cmd = f'skopeo login --tls-verify=false {creds.get("registry")} -u {creds.get("sa")} -p {creds.get("token")}'
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> Skopeo FAILED to login {creds.get("name")}.{bcolors.ENDC}'
-    run_cmd(cmd, error_str)
+    error_str = f' {Fore.RED}{Style.BRIGHT}[ ERROR ] >> Skopeo FAILED to login {creds.get("name")}.'
+    toolbox.run_cmd(cmd, error_str)
 
-def skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target):
+def skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target, safe=False):
     src_cred = fetch_credentials(source.get("sa"), source.get("token"))
     dst_cred = fetch_credentials(target.get("sa"), target.get("token"))
-    cmd = f'skopeo copy --insecure-policy \
-                        --format {manifest_version} \
-                        --src-tls-verify=false \
-                        --src-creds={src_cred} \
-                        --dest-tls-verify=false \
-                        --dest-creds={dst_cred} \
-                        {src_mode}{src_img} \
-                        {dst_mode}{dst_img}'
-    print(cmd)
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to download image {src_img}.{bcolors.ENDC}'
-    print(f'{bcolors.INFO}[ SKOPEO COPY ] >> transfer from {src_mode}{src_img} to {dst_mode}{dst_img}{bcolors.ENDC}')
-    run_cmd(cmd, error_str)
+    if safe:
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ INFO ] >>{Style.NORMAL} Skopeo using {Fore.RED}{Style.BRIGHT}SAFE TRANSFER MODE')
+        img_only = f"{dst_img.split('/')[-1]}"
+        cmd1 = f'skopeo copy --insecure-policy \
+                             --format {manifest_version} \
+                             --src-tls-verify=false \
+                             --src-creds={src_cred} \
+                             {src_mode}{src_img} \
+                             dir:/tmp/{img_only}'
 
-def skopeo_multiple_copy(data, src_mode, dst_mode, source, target):
+        cmd2 = f'skopeo copy --insecure-policy \
+                             --format {manifest_version} \
+                             --dest-tls-verify=false \
+                             --dest-creds={dst_cred} \
+                             dir:/tmp/{img_only} \
+                            {dst_mode}{dst_img}'
+        error_str = f'{Fore.RED}{Style.BRIGHT}[ ERROR ] >> FAILED to download image {src_img}.'
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ SKOPEO PULL - STEP 1 ] >>{Style.NORMAL} transfer from {Style.BRIGHT}{src_mode}{src_img}{Style.NORMAL} to {Style.BRIGHT}dir:/tmp/{img_only}')
+        toolbox.run_cmd(cmd1, error_str, debug)
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ SKOPEO PUSH - STEP 2 ] >>{Style.NORMAL} transfer from {Style.BRIGHT}dir:/tmp/{img_only}{Style.NORMAL} to {Style.BRIGHT}{dst_mode}{dst_img}')
+        toolbox.run_cmd(cmd2, error_str, debug)
+    else:
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ INFO ] >>{Style.NORMAL}  Skopeo using {Fore.RED}{Style.BRIGHT}DIRECT TRANSFER MODE')
+        cmd = f'skopeo copy --insecure-policy \
+                            --format {manifest_version} \
+                            --src-tls-verify=false \
+                            --src-creds={src_cred} \
+                            --dest-tls-verify=false \
+                            --dest-creds={dst_cred} \
+                            {src_mode}{src_img} \
+                            {dst_mode}{dst_img}'
+        error_str = f'{Fore.RED}{Style.BRIGHT}[ ERROR ] >> FAILED to download image {src_img}. '
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ SKOPEO COPY ] >>{Style.NORMAL} transfer from {Style.BRIGHT}{src_mode}{src_img}{Style.NORMAL} to {Style.BRIGHT}{dst_mode}{dst_img}')
+        toolbox.run_cmd(cmd, error_str, debug)
+
+def skopeo_multiple_copy(data, src_mode, dst_mode, source, target, safe=False):
     if source.get('name') == 'docker-hub':
-        print(f'{bcolors.INFO}[ INFO ] >> Multiple transfer from PUBLIC registry{bcolors.ENDC}')
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ INFO ] >>{Style.NORMAL} Multiple transfer from PUBLIC registry')
         for line, value in enumerate(data):
             value = re.sub(invisible_char, '', value)
-            img_split = value.split('/')
-            img_only = f'{img_split[-1]}'
+            img_only = f"{value.split('/')[-1]}"
             src_img = f'{value}'
             dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
-            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target)
+            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target, safe)
     else:
-        print(f'{bcolors.INFO}[ INFO ] >> Multiple transfer from PRIVATE registry{bcolors.ENDC}')
+        print(f'{Fore.YELLOW}{Style.BRIGHT}[ INFO ] >>{Style.NORMAL} Multiple transfer from PRIVATE registry')
         for line, value in enumerate(data):
             value = re.sub(invisible_char, '', value)
-            img_split = value.split('/')
-            img_only = f'{img_split[-1]}'
+            img_only = f"{value.split('/')[-1]}"
             src_img = f'{source.get("registry")}/{source.get("ns")}/{img_only}'
             dst_img = f'{target.get("registry")}/{target.get("ns")}/{img_only}'
-            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target)
+            skopeo_copy(src_img, dst_img, src_mode, dst_mode, source, target, safe)
 
 def skopeo_list_img_tags(img, source=None, release=None):
     if source is None:
         if release is not None:
-            print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all image version of release {release} on repository {img} {bcolors.ENDC}')
-            #cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | grep -e '^\\s*\"{release}'"
-            cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | jq '.[]' | jq 'select(test(\"{release}\"))'"
+            print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >>{Style.NORMAL} Fetching all image version of release {Fore.CYAN}{Style.BRIGHT}{release}{Fore.BLUE}{Style.NORMAL} on repository {Fore.CYAN}{Style.BRIGHT}{img}')
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | jq '.[]' | jq 'select(test(\"^{release}\"))'"
         else:
-            print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images on repository {img} {bcolors.ENDC}')
+            print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >>{Style.NORMAL} Fetching all images on repository {Fore.CYAN}{Style.BRIGHT}{img}')
             cmd = f"skopeo list-tags --tls-verify=false docker://{img} | jq '.Tags' | jq '.[]'"
     else:
         if release is not None:
-            print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images version of release {release} on repository {img} {bcolors.ENDC}')
-            #cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | grep '^\\s*\"{release}'"
-            cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | jq '.[]' | jq 'select(test(\"{release}\"))'"
+            print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >>{Style.NORMAL} Fetching all images version of release {Fore.CYAN}{Style.BRIGHT}{release}{Fore.BLUE}{Style.NORMAL} on repository {Fore.CYAN}{Style.BRIGHT}{img}')
+            cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | jq '.[]' | jq 'select(test(\"^{release}\"))'"
         else:
-            print(f'{bcolors.OKBLUE}[ SKOPEO ] >> Fetching all images on repository {img} {bcolors.ENDC}')
+            print(f'{Fore.BLUE}{Style.BRIGHT}[ SKOPEO ] >>{Style.NORMAL} Fetching all images on repository {Fore.CYAN}{Style.BRIGHT}{img}')
             cmd = f"skopeo list-tags --tls-verify=false docker://{img} --creds {source.get('sa')}:{source.get('token')} | jq '.Tags' | jq '.[]'"
-    error_str = f'{bcolors.FAIL}[ ERROR ] >> FAILED to catch {img} tags.'
-    print(cmd)
-    result = popen_cmd(cmd, error_str)
+    error_str = f'{Fore.RED}{Style.BRIGHT}[ ERROR ] >> FAILED to catch {img} tags.'
+    result = toolbox.popen_cmd(cmd, error_str, debug)
     return result

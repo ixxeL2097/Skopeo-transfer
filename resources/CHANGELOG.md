@@ -9,6 +9,7 @@
 - p: Patch — Programmer error. Bug. Optimization of code.
 
 ## Actual versions
+- v6.0.0
 - v5.0.0
 - v4.5.6
 - v4.5.5
@@ -37,6 +38,21 @@
 - v2.0.0
 - v1.1.0
 - v1.0.0
+
+## [v6.0.0] - Complete refactor
+#### 30/09/2021
+### Json file credentials
+  * Code is fully refactored, implementing : separated toolbox library, simplyfied skopeolib library and many other rework
+  * 3 sub commands instead of flags (img, file and update)
+  * Options are fully handled by flags instead of environment variables
+  * Transport mode handling (choosing between dir, docker, containers-storage and docker-daemon)
+  * Safe/Direct transfer mode implemented to allow direct or 2-times image transfer
+  * Debug mode to print skopeo commands
+  * Using Colorama instead of home-made colours
+  * improved jq functions to get images tags
+  * No more skopeo login action before transfer, instead using credentials directly in transfer operation
+  * Adapted unit tests
+  * Adapted bash wrapper scripts
 
 ## [v5.0.0] - New credentials feature approach
 #### 8/07/2021

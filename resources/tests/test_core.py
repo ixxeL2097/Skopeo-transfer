@@ -7,6 +7,7 @@ import re
 import unittest
 import argparse
 import skopeolib
+from pathlib import Path
 
 pep440 = re.compile('^([a-zA-Z0-9-_]*:v?[0-9.]+-?(r(c|ev)|a(lpha)?|b(eta)?|c|pre(view)?)?[0-9]*(\\.?(post|dev)[0-9])?)$')
 pep440_latest = re.compile('^(?:v?[0-9.-]+(r(c|ev)|a(lpha)?|b(eta)?|c|pre(view)?)?[0-9]*(\\.?(post|dev)[0-9])?|latest)$')
@@ -57,7 +58,9 @@ class MyTest(unittest.TestCase):
         sub_update = subparsers.add_parser('update', help='Update transfer mode')
         # GENERAL arguments
         parser.add_argument('--format', type=str, default='v2s2', choices=['v2s2','v2s1','oci'], help='Manifest type (oci, v2s1, or v2s2) to use in the destination (default is manifest type of source, with fallbacks)')
+        parser.add_argument('--safe', default=False, action='store_true', help='Using safe mode will download and upload image instead of direct transfer')
         parser.add_argument('--creds', type=str, default='credentials.json', help='Path of the json file for registries credentials')
+        parser.add_argument('--debug', default=False, action='store_true', help='Print out information to debug commands')
         # IMG arguments
         sub_img.set_defaults(func=skopeoTransfer.img_transfer_process)
         sub_img.add_argument('image', type=str, help='Name of the docker image to transfer')
@@ -123,8 +126,7 @@ class MyTest(unittest.TestCase):
 
     def test_full_single_get_latest(self):
         # Context
-        os.mkdir('/localhost')
-        os.mkdir('/localhost/default')
+        Path("/localhost/default").mkdir(parents=True, exist_ok=True)
         parser = self.create_parser()
         args = parser.parse_args(['update', 'alpine', '--public', '--dst-mode', 'dir'])
         credentials = self.credentials
@@ -200,3 +202,15 @@ class MyTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             source, target = skopeoTransfer.prepare_transfer(args, credentials)
             args.func(args, credentials, source, target)
+
+    def test_full_single_public_transfer_safe_debug(self):
+        # Context
+        parser = self.create_parser()
+        args = parser.parse_args(['--debug', '--safe', 'img', 'alpine:latest', '--public', '--dst', 'creds2', '--dst-ns', 'ixxel'])
+        credentials = self.credentials
+        # Test
+        try:
+            source, target = skopeoTransfer.prepare_transfer(args, credentials)
+            args.func(args, credentials, source, target)
+        except Exception as exc:
+            assert False, f"Skopeo test_full_single_public_transfer_safe_debug failed : {exc}"
