@@ -120,22 +120,36 @@ jobs:
       uses: ixxeL-actions/buildah-push@main
       with:
         image-id: 'localhost/${PROGRAM_NAME}:${APP_VERSION}'
-        transport: 'oci-archive'
+        transport: 'docker-archive'
         destination: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
         format: '""'
-    - name: Security scan for docker image
-      id: scan-image
+    - name: Security scan for docker image (Grype)
+      id: scan-image1 
       env:
         APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
       uses: ixxeL-actions/grype-scan@main
       with:
         image-ref: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
-        transport: 'oci-archive'
+        transport: 'docker-archive'
         fail-on: '""'
         output: 'table'
         scope: 'AllLayers'
         template: '""'
         verbose: ''
+    - name: Security scan for docker image (Trivy)
+      id: scan-image2
+      env:
+        APP_VERSION: ${{ steps.fetch-version.outputs.APP_VERSION }}
+      uses: ixxeL-actions/trivy-scan@main
+      with:
+        scan-type: 'image'
+        input: '/tmp/${PROGRAM_NAME}-${APP_VERSION}.tar'
+        security-checks: 'vuln,config'
+        severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+        output: '""'
+        format: 'table'
+        template: ''
+        skip-dirs: '/usr/local/bin,/usr/bin'
     - name: Transfer image with Skopeo
       id: transfer-image-version
       env:
