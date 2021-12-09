@@ -67,14 +67,12 @@ jobs:
         else
           echo -e "${GREEN}[ SUCCESS ] > Code coverage is ${COV_RATE} above threshold ${COVERAGE_THRESHOLD}%. Tests are ok.${BLANK}"
         fi
-    - name: Lint with Hadolint
-      id: lint-hadolint
-      run: |
-        echo -e "${BLUE}[ STEP - LINTING DOCKERFILE ] > Linting Dockerfile with Hadolint.${BLANK}"
-        echo -e "${CYAN}[ INFO ] > Hadolint version.${BLANK}"
-        hadolint --version
-        echo -e "${YELLOW}[ EXECUTING ] > Executing Dockerfile linting.${BLANK}"
-        hadolint ${WORKING_DIR}/Dockerfile --ignore DL3007 --ignore DL3017 --ignore DL3018
+    - name: Hadolint Dockerfile scan
+      uses: ixxeL-actions/hadolint@main
+      with:
+        format: 'json'
+        treshold: 'error'
+        working-dir: '${WORKING_DIR}'
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:
