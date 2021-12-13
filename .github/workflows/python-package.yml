@@ -35,6 +35,10 @@ jobs:
       CODE_DIR: resources
     steps:
     - uses: actions/checkout@v2
+    - name: Auto-linting Python code with Black
+      uses: ixxeL-actions/black@main
+      with:
+        working-dir: '${WORKING_DIR}'
     - name: Lint Python code with Flake8
       uses: ixxeL-actions/flake8@main
       with:
@@ -43,17 +47,6 @@ jobs:
         output-file: ''
         ignore-error: 'E501'
         working-dir: '${WORKING_DIR}'
-#     - name: Lint with flake8
-#       id: lint-flake
-#       run: |
-#         echo -e "${BLUE}[ STEP - LINTING CODE ] > Linting Python code with Flake8.${BLANK}"
-#         echo -e "${CYAN}[ INFO ] > Flake8 version.${BLANK}"
-#         flake8 --version
-#         echo -e "${YELLOW}[ EXECUTING ] > Executing code linting.${BLANK}"
-#         flake8 ${WORKING_DIR}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
-#         flake8 ${WORKING_DIR}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
-#         # flake8 ${{ env.CODE_DIR }}/skopeoTransfer.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero
-#         # flake8 ${{ env.CODE_DIR }}/skopeolib.py --count --ignore=E266,E265,E501,E302,E305 --statistics --exit-zero 
     - name: Test with pytest and code coverage with Coverage
       id: test-pytest
       run: |
