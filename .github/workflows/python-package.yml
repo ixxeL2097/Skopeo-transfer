@@ -23,6 +23,7 @@ env:
 jobs:
   test:
     strategy:
+      max-parallel: 2
       matrix:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -34,10 +35,20 @@ jobs:
     env:
       CODE_DIR: resources
     steps:
-    - uses: actions/checkout@v2
+    - name: git-clone
+      uses: actions/checkout@v2
     - name: Auto-linting Python code with Black
       uses: ixxeL-actions/black@main
       with:
+        working-dir: '${WORKING_DIR}'
+    - name: Security lint Python code with Bandit
+      uses: ixxeL-actions/bandit@main
+      with:
+        format: 'screen'
+        exit-zero: 'true'
+        security: 'all'
+        confidence: 'all'
+        output-file: ''
         working-dir: '${WORKING_DIR}'
     - name: Lint Python code with Flake8
       uses: ixxeL-actions/flake8@main
@@ -82,6 +93,7 @@ jobs:
   build:
     needs: [test]
     strategy:
+      max-parallel: 2
       matrix:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
